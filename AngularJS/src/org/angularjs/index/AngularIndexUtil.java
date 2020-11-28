@@ -47,10 +47,12 @@ import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
+import static org.angularjs.index.AngularJSDirectivesSupport.findAttributeDirectives;
+
 /**
  * @author Dennis.Ushakov
  */
-public class AngularIndexUtil {
+public final class AngularIndexUtil {
   public static final int BASE_VERSION = 65; // Don't forget to update AngularJSIndexingHandler registration
 
   private static final ConcurrentMap<String, Key<ParameterizedCachedValue<Collection<String>, Pair<Project, ID<String, ?>>>>> ourCacheKeys =
@@ -157,10 +159,10 @@ public class AngularIndexUtil {
     return CachedValuesManager.getManager(project).getCachedValue(project, () -> {
       int version = -1;
       PsiElement resolve;
-      if ((resolve = resolve(project, AngularDirectivesIndex.KEY, "ngMessages")) != null) {
+      if ((resolve = ContainerUtil.getFirstItem(findAttributeDirectives(project, "ngMessages"))) != null) {
         version = 13;
       }
-      else if ((resolve = resolve(project, AngularDirectivesIndex.KEY, "ngModel")) != null) {
+      else if ((resolve = ContainerUtil.getFirstItem(findAttributeDirectives(project,"ngModel"))) != null) {
         version = 12;
       }
       if (resolve != null) {

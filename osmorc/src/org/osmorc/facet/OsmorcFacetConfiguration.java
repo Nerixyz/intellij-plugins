@@ -49,8 +49,8 @@ import org.jetbrains.osgi.jps.util.OrderedProperties;
 import org.osmorc.facet.ui.OsmorcFacetGeneralEditorTab;
 import org.osmorc.facet.ui.OsmorcFacetJAREditorTab;
 import org.osmorc.facet.ui.OsmorcFacetManifestGenerationEditorTab;
+import org.osmorc.i18n.OsmorcBundle;
 import org.osmorc.settings.ProjectSettings;
-import org.osmorc.util.OsgiUiUtil;
 
 import java.io.File;
 import java.io.IOException;
@@ -59,6 +59,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicLong;
 
 import static aQute.bnd.osgi.Constants.INCLUDE_RESOURCE;
 
@@ -110,7 +111,7 @@ public final class OsmorcFacetConfiguration implements FacetConfiguration, Modif
   private OutputPathType myOutputPathType;
   private ManifestGenerationMode myManifestGenerationMode = ManifestGenerationMode.OsmorcControlled;
 
-  private volatile long myModificationCount = 0;
+  private final AtomicLong myModificationCount = new AtomicLong();
 
   @Override
   public FacetEditorTab[] createEditorTabs(FacetEditorContext context, FacetValidatorsManager validatorsManager) {
@@ -124,6 +125,7 @@ public final class OsmorcFacetConfiguration implements FacetConfiguration, Modif
   }
 
   @Override
+  @SuppressWarnings("deprecation")
   public void readExternal(Element element) {
     if (element.getAttributeValue(MANIFEST_GENERATION_MODE) == null) {
       // the new attribute is not there, so we got an old file, to be converted.
@@ -149,8 +151,8 @@ public final class OsmorcFacetConfiguration implements FacetConfiguration, Modif
         setManifestGenerationMode(ManifestGenerationMode.Manually);
       }
       else {
-        String message = "The configuration at least one OSGi facet is invalid and has been reset. Please check your facet settings!";
-        OsgiUiUtil.IMPORTANT_NOTIFICATIONS.createNotification(message, NotificationType.WARNING).notify(myFacet.getModule().getProject());
+        String message = OsmorcBundle.message("facet.config.reset");
+        OsmorcBundle.important("", message, NotificationType.WARNING).notify(myFacet.getModule().getProject());
       }
     }
     else {
@@ -179,7 +181,7 @@ public final class OsmorcFacetConfiguration implements FacetConfiguration, Modif
 
     Element props = element.getChild(ADDITIONAL_PROPERTIES);
     if (props != null) {
-      List children = props.getChildren();
+      List<Element> children = props.getChildren();
       if (children.isEmpty()) {
         // ok this is a legacy file
         setAdditionalProperties(props.getText());
@@ -187,9 +189,8 @@ public final class OsmorcFacetConfiguration implements FacetConfiguration, Modif
       else {
         StringBuilder builder = new StringBuilder();
         // new handling as fix for OSMORC-43
-        for (Object child : children) {
-          Element prop = (Element)child;
-          builder.append(prop.getAttributeValue(KEY)).append(":").append(prop.getAttributeValue(VALUE)).append("\n");
+        for (Element prop : children) {
+          builder.append(prop.getAttributeValue(KEY)).append(':').append(prop.getAttributeValue(VALUE)).append('\n');
         }
         setAdditionalProperties(builder.toString());
       }
@@ -206,10 +207,11 @@ public final class OsmorcFacetConfiguration implements FacetConfiguration, Modif
       }
     }
 
-    myModificationCount++;
+    myModificationCount.getAndIncrement();
   }
 
   @Override
+  @SuppressWarnings("deprecation")
   public void writeExternal(Element element) throws WriteExternalException {
     element.setAttribute(MANIFEST_GENERATION_MODE, getManifestGenerationMode().name());
     element.setAttribute(MANIFEST_LOCATION, getManifestLocation());
@@ -284,7 +286,7 @@ public final class OsmorcFacetConfiguration implements FacetConfiguration, Modif
 
   public void setManifestGenerationMode(@NotNull ManifestGenerationMode manifestGenerationMode) {
     myManifestGenerationMode = manifestGenerationMode;
-    myModificationCount++;
+    myModificationCount.getAndIncrement();
   }
 
   public boolean isOsmorcControlsManifest() {
@@ -313,7 +315,7 @@ public final class OsmorcFacetConfiguration implements FacetConfiguration, Modif
 
   public void setManifestLocation(String manifestLocation) {
     myManifestLocation = manifestLocation;
-    myModificationCount++;
+    myModificationCount.getAndIncrement();
   }
 
   /**
@@ -405,7 +407,7 @@ public final class OsmorcFacetConfiguration implements FacetConfiguration, Modif
   public void setJarFileLocation(String jarFileLocation, OutputPathType outputPathType) {
     myJarFileLocation = jarFileLocation;
     myOutputPathType = outputPathType;
-    myModificationCount++;
+    myModificationCount.getAndIncrement();
   }
 
   public OutputPathType getOutputPathType() {
@@ -419,7 +421,7 @@ public final class OsmorcFacetConfiguration implements FacetConfiguration, Modif
 
   public void setBundleSymbolicName(@Nullable String bundleSymbolicName) {
     myBundleSymbolicName = bundleSymbolicName;
-    myModificationCount++;
+    myModificationCount.getAndIncrement();
   }
 
   public String getBundleActivator() {
@@ -428,7 +430,7 @@ public final class OsmorcFacetConfiguration implements FacetConfiguration, Modif
 
   public void setBundleActivator(@Nullable String bundleActivator) {
     myBundleActivator = bundleActivator;
-    myModificationCount++;
+    myModificationCount.getAndIncrement();
   }
 
   @NotNull
@@ -438,12 +440,12 @@ public final class OsmorcFacetConfiguration implements FacetConfiguration, Modif
 
   public void setBundleVersion(@Nullable String bundleVersion) {
     myBundleVersion = bundleVersion;
-    myModificationCount++;
+    myModificationCount.getAndIncrement();
   }
 
   public void setAdditionalProperties(@Nullable String additionalProperties) {
     myAdditionalProperties = additionalProperties;
-    myModificationCount++;
+    myModificationCount.getAndIncrement();
   }
 
   /**
@@ -499,7 +501,7 @@ public final class OsmorcFacetConfiguration implements FacetConfiguration, Modif
 
   public void setUseProjectDefaultManifestFileLocation(boolean useProjectDefaultManifestFileLocation) {
     myUseProjectDefaultManifestFileLocation = useProjectDefaultManifestFileLocation;
-    myModificationCount++;
+    myModificationCount.getAndIncrement();
   }
 
   public boolean isUseProjectDefaultManifestFileLocation() {
@@ -513,7 +515,7 @@ public final class OsmorcFacetConfiguration implements FacetConfiguration, Modif
 
   public void setBndFileLocation(String bndFileLocation) {
     myBndFileLocation = bndFileLocation;
-    myModificationCount++;
+    myModificationCount.getAndIncrement();
   }
 
   @NotNull
@@ -523,7 +525,7 @@ public final class OsmorcFacetConfiguration implements FacetConfiguration, Modif
 
   public void setBundlorFileLocation(String _bundlorFileLocation) {
     myBundlorFileLocation = _bundlorFileLocation;
-    myModificationCount++;
+    myModificationCount.getAndIncrement();
   }
 
   @NotNull
@@ -536,7 +538,7 @@ public final class OsmorcFacetConfiguration implements FacetConfiguration, Modif
 
   public void setAdditionalJARContents(@NotNull List<Pair<String, String>> additionalJARContents) {
     myAdditionalJARContents = additionalJARContents;
-    myModificationCount++;
+    myModificationCount.getAndIncrement();
   }
 
   @NotNull
@@ -546,7 +548,7 @@ public final class OsmorcFacetConfiguration implements FacetConfiguration, Modif
 
   public void setIgnoreFilePattern(String attributeValue) {
     myIgnoreFilePattern = attributeValue;
-    myModificationCount++;
+    myModificationCount.getAndIncrement();
   }
 
   public boolean isAlwaysRebuildBundleJAR() {
@@ -555,7 +557,7 @@ public final class OsmorcFacetConfiguration implements FacetConfiguration, Modif
 
   public void setAlwaysRebuildBundleJAR(boolean alwaysRebuildBundleJAR) {
     myAlwaysRebuildBundleJAR = alwaysRebuildBundleJAR;
-    myModificationCount++;
+    myModificationCount.getAndIncrement();
   }
 
   public boolean isDoNotSynchronizeWithMaven() {
@@ -564,7 +566,7 @@ public final class OsmorcFacetConfiguration implements FacetConfiguration, Modif
 
   public void setDoNotSynchronizeWithMaven(boolean doNotSynchronizeWithMaven) {
     myDoNotSynchronizeWithMaven = doNotSynchronizeWithMaven;
-    myModificationCount++;
+    myModificationCount.getAndIncrement();
   }
 
   /**
@@ -580,6 +582,6 @@ public final class OsmorcFacetConfiguration implements FacetConfiguration, Modif
 
   @Override
   public long getModificationCount() {
-    return myModificationCount;
+    return myModificationCount.get();
   }
 }

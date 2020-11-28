@@ -4,11 +4,14 @@ package org.jetbrains.vuejs.codeInsight
 import com.intellij.codeInsight.completion.CompletionUtil
 import com.intellij.extapi.psi.ASTWrapperPsiElement
 import com.intellij.extapi.psi.StubBasedPsiElementBase
+import com.intellij.lang.ecmascript6.psi.JSExportAssignment
 import com.intellij.lang.ecmascript6.resolve.ES6PsiUtil
 import com.intellij.lang.injection.InjectedLanguageManager
 import com.intellij.lang.javascript.JSStubElementTypes
+import com.intellij.lang.javascript.index.JSSymbolUtil
 import com.intellij.lang.javascript.psi.*
 import com.intellij.lang.javascript.psi.impl.JSPsiImplUtils
+import com.intellij.lang.javascript.psi.resolve.JSClassResolver
 import com.intellij.lang.javascript.psi.types.*
 import com.intellij.lang.javascript.psi.types.evaluable.JSApplyNewType
 import com.intellij.lang.javascript.psi.types.evaluable.JSReturnedExpressionType
@@ -19,8 +22,8 @@ import com.intellij.lang.javascript.psi.util.JSStubBasedPsiTreeUtil
 import com.intellij.lang.javascript.psi.util.JSStubBasedPsiTreeUtil.isStubBased
 import com.intellij.lang.typescript.modules.TypeScriptNodeReference
 import com.intellij.lang.typescript.resolve.TypeScriptAugmentationUtil
-import com.intellij.notification.NotificationDisplayType
 import com.intellij.notification.NotificationGroup
+import com.intellij.notification.NotificationGroupManager
 import com.intellij.openapi.util.Key
 import com.intellij.openapi.util.text.StringUtil
 import com.intellij.psi.PsiElement
@@ -38,7 +41,6 @@ import com.intellij.psi.xml.XmlFile
 import com.intellij.psi.xml.XmlTag
 import com.intellij.util.ObjectUtils.tryCast
 import com.intellij.util.castSafelyTo
-import icons.VuejsIcons
 import one.util.streamex.StreamEx
 import org.jetbrains.vuejs.index.findScriptTag
 import org.jetbrains.vuejs.lang.expr.psi.VueJSEmbeddedExpression
@@ -51,14 +53,15 @@ import kotlin.collections.HashSet
 import kotlin.reflect.KClass
 
 const val LANG_ATTRIBUTE_NAME = "lang"
+const val SETUP_ATTRIBUTE_NAME = "setup"
 const val ATTR_DIRECTIVE_PREFIX = "v-"
 const val ATTR_EVENT_SHORTHAND = '@'
 const val ATTR_SLOT_SHORTHAND = '#'
 const val ATTR_ARGUMENT_PREFIX = ':'
 const val ATTR_MODIFIER_PREFIX = '.'
 
-val VUE_NOTIFICATIONS =  NotificationGroup("Vue", NotificationDisplayType.BALLOON, true, null,
-                                            VuejsIcons.Vue, "Vue", null)
+val VUE_NOTIFICATIONS: NotificationGroup
+  get() = NotificationGroupManager.getInstance().getNotificationGroup("Vue")
 
 fun fromAsset(name: String): String {
   // TODO ensure that this conversion conforms to Vue.js rules
@@ -156,10 +159,15 @@ fun resolveElementTo(element: PsiElement?, vararg classes: KClass<out JSElement>
     if (visited.add(cur)) {
       if (classes.any { it.isInstance(cur) }) return cur as? JSElement
       when (cur) {
+        is JSFunction -> {
+          JSStubBasedPsiTreeUtil.findReturnedExpressions(cur).asSequence()
+            .filter { JSReturnedExpressionType.isCountableReturnedExpression(it) }
+            .toCollection(queue)
+        }
         is JSInitializerOwner -> {
           ( // Try with stub
             when (cur) {
-              is JSProperty -> cur.objectLiteralExpressionInitializer
+              is JSProperty -> cur.objectLiteralExpressionInitializer ?: cur.tryGetFunctionInitializer()
               is JSVariable -> cur.initializerOrStub
               else -> null
             }
@@ -171,11 +179,6 @@ fun resolveElementTo(element: PsiElement?, vararg classes: KClass<out JSElement>
         }
         is PsiPolyVariantReference -> cur.multiResolve(false)
           .mapNotNullTo(queue) { if (it.isValidResult) it.element else null }
-        is JSFunctionExpression -> {
-          JSStubBasedPsiTreeUtil.findReturnedExpressions(cur).asSequence()
-            .filter { JSReturnedExpressionType.isCountableReturnedExpression(it) }
-            .toCollection(queue)
-        }
         else -> JSStubBasedPsiTreeUtil.calculateMeaningfulElements(cur)
           .toCollection(queue)
       }
@@ -243,7 +246,7 @@ fun getJSTypeFromPropOptions(expression: JSExpression?): JSType? {
   }
 }
 
-private fun getJSTypeFromVueType(reference: JSReferenceExpression): JSType? {
+private fun getJSTypeFromVueType(reference: JSReferenceExpression): JSType {
   return JSApplyNewType(JSTypeofTypeImpl(reference, JSTypeSourceFactory.createTypeSource(reference, false)),
                         JSTypeSourceFactory.createTypeSource(reference.containingFile, false))
 }
@@ -288,6 +291,20 @@ fun getHostFile(context: PsiElement): PsiFile? {
   val original = CompletionUtil.getOriginalOrSelf(context)
   val hostFile = FileContextUtil.getContextFile(if (original !== context) original else context.containingFile.originalFile)
   return hostFile?.originalFile
+}
+
+fun findDefaultExport(element: PsiElement?): PsiElement? =
+  element?.let {
+    (ES6PsiUtil.findDefaultExport(element) as? JSExportAssignment)?.stubSafeElement
+    ?: findDefaultCommonJSExport(it)
+  }
+
+private fun findDefaultCommonJSExport(element: PsiElement): PsiElement? {
+  return JSClassResolver.getInstance().findElementsByQNameIncludingImplicit(JSSymbolUtil.MODULE_EXPORTS, element.containingFile)
+    .asSequence()
+    .filterIsInstance<JSDefinitionExpression>()
+    .mapNotNull { it.initializerOrStub }
+    .firstOrNull()
 }
 
 private val resolveSymbolCache = ConcurrentHashMap<String, Key<CachedValue<*>>>()

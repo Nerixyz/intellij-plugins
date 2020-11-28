@@ -1,3 +1,6 @@
+# This file is the main entrypoint in the process of injection of RubyMine output formatter into minitest / minitest-reporters
+# infrastructure. It sets up the runner and reporter for minitest.
+
 begin
   require 'teamcity/runner_common'
   require 'teamcity/utils/service_message_factory'
@@ -31,7 +34,7 @@ else
         alias_method :original_status, :status
 
         def status(io = nil)
-          Minitest.rubymine_reporter.close_all_suites()
+          Minitest.rubymine_reporter.test_case_manager.end_execution
           if io.nil?
             original_status
           else
@@ -82,52 +85,143 @@ else
       end
     end
 
+    class RubyMineMinitestParallelTestCaseManager
+      attr_accessor :reporter, :my_mutex, :already_run_tests
+
+      def initialize(reporter)
+        GC.disable
+        self.reporter = reporter
+        self.my_mutex = Mutex.new
+        self.already_run_tests = []
+      end
+
+      def init
+        Minitest.my_drb_url = DRb.start_service('druby://127.0.0.1:' + get_free_port.to_s, self.already_run_tests).uri
+      end
+
+      def get_free_port
+        count = 0
+        port = 9997
+        begin
+          count += 1
+          if count > 10
+            raise "Can't find free TCP port"
+          end
+          server = TCPServer.new('127.0.0.1', port)
+          server.close
+        rescue Errno::EADDRINUSE
+          port = rand(65000 - 1024) + 1024
+          retry
+        end
+        port
+      end
+
+      def end_execution
+        close_all_suites
+      end
+
+      def process_test(test)
+        DRb.start_service
+        tests = DRbObject.new_with_uri(Minitest.my_drb_url)
+
+        my_mutex.synchronize {
+          unless tests.include? test.class.to_s
+            tests << test.class.to_s
+            reporter.log(Rake::TeamCity::MessageFactory.create_suite_started(test.class.to_s, reporter.minitest_test_location(test), '0', test.class.to_s))
+          end
+        }
+      end
+
+      private
+        def close_all_suites
+          (0...already_run_tests.count).each do |i|
+            reporter.log(Rake::TeamCity::MessageFactory.create_suite_finished(already_run_tests[i], already_run_tests[i]))
+          end
+          already_run_tests.clear
+          GC.enable
+        end
+    end
+
+    class RubyMineMinitestSequenceTestCaseManager
+      attr_accessor :reporter, :running_test_case
+
+      def initialize(reporter)
+        self.reporter = reporter
+        self.running_test_case = nil
+      end
+
+      def end_execution
+        if running_test_case
+          reporter.log(Rake::TeamCity::MessageFactory.create_suite_finished(running_test_case, running_test_case))
+        end
+      end
+
+      def process_test(test)
+        if test.class.to_s != running_test_case
+          if running_test_case
+            reporter.log(Rake::TeamCity::MessageFactory.create_suite_finished(running_test_case, running_test_case))
+          end
+          reporter.log(Rake::TeamCity::MessageFactory.create_suite_started(test.class.to_s, reporter.minitest_test_location(test), '0', test.class.to_s))
+          self.running_test_case = test.class.to_s
+        end
+      end
+    end
+
     class MyRubyMineReporter < MiniTest::Unit
       include ::Rake::TeamCity::RunnerCommon
       include ::Rake::TeamCity::RunnerUtils
       include ::Rake::TeamCity::Utils::UrlFormatter
 
-      attr_accessor :io, :test_count, :assertion_count, :failures, :errors, :skips
-      attr_accessor :already_run_tests
-      attr_accessor :my_mutex
+      attr_accessor :io, :options, :test_count, :assertion_count, :failures, :errors, :skips, :test_case_manager, :parallel_run
 
       def initialize(options = {})
         super()
         @passed = true
+        self.options= options
         self.io= options[:io] || $stdout
         self.test_count = 0
         self.assertion_count = 0
         self.failures = 0
         self.errors = 0
         self.skips = 0
-        self.my_mutex = Mutex.new
-        self.already_run_tests = []
-        Minitest.my_drb_url = DRb.start_service(nil, self.already_run_tests).uri
+
+        self.parallel_run = parallel_run?
+        if parallel_run
+          self.test_case_manager = RubyMineMinitestParallelTestCaseManager.new(self)
+          self.test_case_manager.init
+        else
+          self.test_case_manager = RubyMineMinitestSequenceTestCaseManager.new(self)
+        end
+      end
+
+      # adds options from minitest
+      # called from <path/to/minitest-reporters>/lib/minitest/minitest_reporter_plugin.rb:52
+      def add_defaults(defaults)
+        self.options = defaults.merge(options)
+      end
+
+      # copied from minitest-reporters: minitest_reporter_plugin.rb
+      def total_count(options)
+        filter = options[:filter] || '/./'
+        filter = Regexp.new $1 if filter =~ /\/(.*)\//
+
+        Minitest::Runnable.runnables.map(&:runnable_methods).flatten.find_all { |m|
+          filter === m || filter === "#{self}##{m}"
+        }.size
       end
 
       def start
-        io.puts 'Started'
-        io.puts
-
         # Setup test runner's MessageFactory
         set_message_factory(Rake::TeamCity::MessageFactory)
         log_test_reporter_attached()
 
         # Report tests count:
-        # todo: get test count
         if ::Rake::TeamCity.is_in_idea_mode
-          log(Rake::TeamCity::MessageFactory.create_tests_count(test_count))
+          log(Rake::TeamCity::MessageFactory.create_tests_count(options[:total_count] || total_count(options)))
         elsif ::Rake::TeamCity.is_in_buildserver_mode
-          log(Rake::TeamCity::MessageFactory.create_progress_message("Starting.. (#{self.test_count} tests)"))
+          log(Rake::TeamCity::MessageFactory.create_progress_message("Starting.. (#{options[:total_count] || total_count(options)} tests)"))
         end
         @suites_start_time = Time.now
-      end
-
-      def close_all_suites
-        (0...already_run_tests.count).each do |i|
-          log(Rake::TeamCity::MessageFactory.create_suite_finished(already_run_tests[i], self.already_run_tests[i]))
-        end
-        self.already_run_tests.clear()
       end
 
       def prerecord klass, name
@@ -135,7 +229,7 @@ else
       end
 
       def report
-        close_all_suites
+        test_case_manager.end_execution
         []
       end
 
@@ -150,20 +244,13 @@ else
 
       def before_test(test)
         fqn = get_fqn_from_test(test)
-        tests = DRbObject.new_with_uri(Minitest.my_drb_url)
-        DRb.start_service
 
-        my_mutex.synchronize {
-          unless tests.include? test.class.to_s
-            tests << test.class.to_s
-            log(Rake::TeamCity::MessageFactory.create_suite_started(test.class.to_s, minitest_test_location(test.class.to_s), '0', test.class.to_s))
-          end
-        }
+        test_case_manager.process_test(test)
 
         @test_start_time = Time.new
         @test_started = true
         test_name = get_test_name(test)
-        log(Rake::TeamCity::MessageFactory.create_test_started(test_name, minitest_test_location(fqn), test.class.to_s, fqn))
+        log(Rake::TeamCity::MessageFactory.create_test_started(test_name, minitest_test_location(test), test.class.to_s, fqn))
       end
 
       def after_test(result)
@@ -212,24 +299,14 @@ else
         @passed
       end
 
-      private
-      def get_test_name(test)
-        if defined? test.name
-          test.name
-        else
-          test.__name__
-        end
-      end
-
-      def get_fqn_from_test(test)
-        test_name = get_test_name(test)
-
-        if "#{test.class}".end_with?("MiniTest::TestResult")
-          "#{test.suite}.#{test_name}"
-        elsif test.respond_to? :klass
-          "#{test.klass}.#{test_name}"
-        else
-          "#{test.class}.#{test_name}"
+      def minitest_test_location(test)
+        begin
+          test_name = get_test_name(test)
+          location = test.class.instance_method(test_name).source_location
+          "file://#{location[0]}:#{location[1]}"
+        rescue NameError, NoMethodError
+          fqn = get_fqn_from_test(test)
+          "ruby_minitest_qn://#{fqn}" if fqn
         end
       end
 
@@ -238,13 +315,42 @@ else
         io.puts("\n#{msg}")
         io.flush
 
-        # returns:
         msg
       end
 
-      def minitest_test_location(fqn)
-        return nil if (fqn.nil?)
-        "ruby_minitest_qn://#{fqn}"
+      private
+      def parallel_run?
+        defined?(Minitest) && Minitest.respond_to?(:parallel_executor) && Minitest.parallel_executor.respond_to?(:start) ||
+            defined?(MiniTest::Unit::TestCase) && MiniTest::Unit::TestCase.respond_to?(:test_order) && MiniTest::Unit::TestCase.test_order == :parallel
+      end
+
+      def get_test_name(test)
+        if ::Rake::TeamCity.is_in_buildserver_mode
+          # for TeamCity it's necessary to provide FQN
+          get_fqn_from_test(test)
+        else
+          get_short_test_name(test)
+        end
+      end
+
+      def get_short_test_name(test)
+        if defined? test.name
+          test.name
+        else
+          test.__name__
+        end
+      end
+
+      def get_fqn_from_test(test)
+        test_name = get_short_test_name(test)
+
+        if "#{test.class}".end_with?("MiniTest::TestResult")
+          "#{test.suite}.#{test_name}"
+        elsif test.respond_to? :klass
+          "#{test.klass}.#{test_name}"
+        else
+          "#{test.class}.#{test_name}"
+        end
       end
 
       def with_result(result)
@@ -256,4 +362,6 @@ else
       end
     end
   end
+
+  require 'minitest/rubymine_minitest_initializer'
 end

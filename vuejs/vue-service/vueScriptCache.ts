@@ -42,6 +42,7 @@ export class VueScriptCache {
     let isScript = false;
     const ts_impl = this.ts_impl
     let scriptKind = ts_impl.ScriptKind.JS;
+    let scriptSetup = false;
     const parser = new Parser({
       onopentag(name: string, attribs: { [p: string]: string }) {
         if (name === "script" && level === 0) {
@@ -64,6 +65,9 @@ export class VueScriptCache {
                   break;
               }
             }
+            if (attr.toLowerCase() == "setup") {
+              scriptSetup = true
+            }
           }
         }
         level++;
@@ -85,10 +89,14 @@ export class VueScriptCache {
     parser.write(contents)
     parser.end()
 
-    // Allow for empty <script> tag
+    // Support empty <script> tag
     if (result.trim() === "") {
-      result = "import Vue from 'vue'; export default Vue;"
+      result = "import componentDefinition from '*.vue'; export default componentDefinition;"
       scriptKind = ts_impl.ScriptKind.TS;
+    }
+    // Support <script setup> syntax
+    else if (scriptSetup) {
+      result = result + "; import __componentDefinition from '*.vue'; export default __componentDefinition;"
     }
 
     const snapshot = ts_impl.ScriptSnapshot.fromString(result);

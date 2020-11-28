@@ -13,15 +13,19 @@ import java.util.*
 
 class VueAttributeNameParser private constructor() {
   companion object {
+    fun parse(attributeName: CharSequence, context: String? = null, isTopLevel: Boolean = false): VueAttributeInfo {
+      return parse(attributeName) { it.isValidIn(context, isTopLevel) }
+    }
 
-    fun parse(attributeName: String, context: String? = null, isTopLevel: Boolean = false): VueAttributeInfo =
-      parse(attributeName) { it.isValidIn(context, isTopLevel) }
+    fun parse(attributeName: CharSequence, context: XmlTag): VueAttributeInfo {
+      return parse(attributeName) { it.isValidIn(context) }
+    }
 
-    fun parse(attributeName: String, context: XmlTag): VueAttributeInfo =
-      parse(attributeName) { it.isValidIn(context) }
+    private fun parse(attributeName: CharSequence, isValid: (VueAttributeKind) -> Boolean): VueAttributeInfo {
+      if (attributeName.length == 0) {
+        return VueAttributeInfo("", VueAttributeKind.PLAIN)
+      }
 
-    private fun parse(attributeName: String, isValid: (VueAttributeKind) -> Boolean): VueAttributeInfo {
-      if (attributeName.isEmpty()) return VueAttributeInfo("", VueAttributeKind.PLAIN)
       val name: String
       val kind: VueDirectiveKind
       var paramsPos: Int
@@ -96,7 +100,7 @@ class VueAttributeNameParser private constructor() {
       return VueDirectiveInfo(name, kind, arguments, isShorthand, parseModifiers(attributeName, paramsPos))
     }
 
-    private fun parseModifiers(modifiers: String, startPos: Int): Set<String> {
+    private fun parseModifiers(modifiers: CharSequence, startPos: Int): Set<String> {
       if (startPos >= modifiers.length || modifiers[startPos] != ATTR_MODIFIER_PREFIX) {
         return emptySet()
       }
@@ -227,6 +231,7 @@ class VueAttributeNameParser private constructor() {
     SCRIPT_ID(ID_ATTRIBUTE_NAME, requiresTag = SCRIPT_TAG_NAME, onlyTopLevelTag = false),
     SCRIPT_SRC(SRC_ATTRIBUTE_NAME, requiresTag = SCRIPT_TAG_NAME),
     SCRIPT_LANG(LANG_ATTRIBUTE_NAME, requiresTag = SCRIPT_TAG_NAME),
+    SCRIPT_SETUP(SETUP_ATTRIBUTE_NAME, requiresValue = false, requiresTag = SCRIPT_TAG_NAME),
     ;
 
     fun isValidIn(context: String?, isTopLevel: Boolean): Boolean {

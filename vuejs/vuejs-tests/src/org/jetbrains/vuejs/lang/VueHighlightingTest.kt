@@ -1,11 +1,12 @@
 // Copyright 2000-2020 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package org.jetbrains.vuejs.lang
 
+import com.intellij.lang.javascript.JSTestUtils
 import com.intellij.lang.javascript.JSTestUtils.testWithinLanguageLevel
 import com.intellij.lang.javascript.JavaScriptBundle
 import com.intellij.lang.javascript.dialects.JSLanguageLevel
 import com.intellij.lang.javascript.inspections.JSUnusedGlobalSymbolsInspection
-import com.intellij.openapi.application.PathManager
+import com.intellij.lang.javascript.library.JSCorePredefinedLibrariesProvider
 import com.intellij.psi.css.inspections.invalid.CssInvalidFunctionInspection
 import com.intellij.psi.css.inspections.invalid.CssInvalidPseudoSelectorInspection
 import com.intellij.spellchecker.inspections.SpellCheckingInspection
@@ -19,7 +20,7 @@ import org.jetbrains.plugins.scss.inspections.SassScssUnresolvedVariableInspecti
 import org.jetbrains.vuejs.lang.html.VueFileType
 
 class VueHighlightingTest : BasePlatformTestCase() {
-  override fun getTestDataPath(): String = PathManager.getHomePath() + "/contrib/vuejs/vuejs-tests/testData/highlighting"
+  override fun getTestDataPath(): String = getVueTestDataPath() + "/highlighting"
 
   override fun setUp() {
     super.setUp()
@@ -60,8 +61,7 @@ class VueHighlightingTest : BasePlatformTestCase() {
   }
 
   fun testShorthandArrowFunctionInTemplate() {
-    testWithinLanguageLevel(JSLanguageLevel.JSX, myFixture.project, ThrowableRunnable<Exception> {
-      myFixture.configureByText("ShorthandArrowFunctionInTemplate.vue", """
+    myFixture.configureByText("ShorthandArrowFunctionInTemplate.vue", """
 <template>
     <div id="app">
         <div @event="val => bar = val"></div>
@@ -77,8 +77,7 @@ class VueHighlightingTest : BasePlatformTestCase() {
     }
 </script>
 """)
-      myFixture.checkHighlighting()
-    })
+    myFixture.checkHighlighting()
   }
 
   fun testShorthandArrowFunctionParsedInECMAScript5InTemplate() {
@@ -86,7 +85,7 @@ class VueHighlightingTest : BasePlatformTestCase() {
       myFixture.configureByText("ShorthandArrowFunctionInTemplate.vue", """
   <template>
       <div id="app">
-          <div @event="val =<error descr="expression expected">></error> bar = val"></div>
+          <div @event="val =<error descr="Expression expected">></error> bar = val"></div>
           {{bar}}
       </div>
   </template>
@@ -646,7 +645,7 @@ Vue.component('global-comp-literal', {
   fun testVBindVOnHighlighting() {
     myFixture.configureByText("VBindHighlighting.vue", """
 <template>
-    <for-v-bind :class="2" v-bind:style="<error descr="expression expected">"</error> :test-prop.camel="1" v-on:click="callMe" @copy="onCopy" ></for-v-bind>
+    <for-v-bind :class="2" v-bind:style="<error descr="Expression expected">"</error> :test-prop.camel="1" v-on:click="callMe" @copy="onCopy" ></for-v-bind>
     <for-v-bind class="" style="" v-on:submit.prevent></for-v-bind>
     <div <warning descr="Attribute @ is not allowed here">@</warning>="<weak_warning descr="Unresolved variable or type foo">foo</weak_warning>"></div>
     <div <warning descr="Attribute : is not allowed here">:</warning>="<weak_warning descr="Unresolved variable or type foo">foo</weak_warning>"></div>
@@ -788,7 +787,7 @@ Vue.component('global-comp-literal', {
   }
 
   fun testBuiltinTagsHighlighting() {
-    myFixture.configureDependencies(VueTestModule.VUE_2_5_3)
+    myFixture.configureVueDependencies(VueTestModule.VUE_2_5_3)
     myFixture.configureByText("BuiltinTagsHighlighting.vue", """
 <template>
     <transition-group>
@@ -1183,6 +1182,8 @@ import BComponent from 'b-component'
   }
 
   fun testFlowJSEmbeddedContent() {
+    // Flow is not used unless there is associated .flowconfig. Instead of it to have 'console' resolved we may enable HTML library.
+    JSTestUtils.setDependencyOnPredefinedJsLibraries(project, testRootDisposable, JSCorePredefinedLibrariesProvider.LIB_HTML)
     testWithinLanguageLevel<Exception>(JSLanguageLevel.FLOW, project) {
       myFixture.configureByText("FlowJSEmbeddedContent.vue", """
 <script>
@@ -1296,7 +1297,7 @@ var <info descr="global variable">i</info>:<info descr="exported class">SpaceInt
   }
 
   fun testVueExtendSyntax() {
-    myFixture.configureDependencies(VueTestModule.VUE_2_5_3)
+    myFixture.configureVueDependencies(VueTestModule.VUE_2_5_3)
     myFixture.configureByText("a-component.vue", """<script>export default Vue.extend({props:{msg: String}})</script>""")
     myFixture.configureByText("b-component.vue", """
       <template>
@@ -1319,7 +1320,7 @@ var <info descr="global variable">i</info>:<info descr="exported class">SpaceInt
   }
 
   fun testBootstrapVue() {
-    myFixture.configureDependencies(VueTestModule.BOOTSTRAP_VUE_2_0_0_RC_11)
+    myFixture.configureVueDependencies(VueTestModule.BOOTSTRAP_VUE_2_0_0_RC_11)
     myFixture.configureByText("b-component.vue", """
       <template>
         <b-alert show>Foo</b-alert>
@@ -1411,7 +1412,7 @@ var <info descr="global variable">i</info>:<info descr="exported class">SpaceInt
   }
 
   fun testDirectiveWithModifiers() {
-    myFixture.configureDependencies(VueTestModule.BOOTSTRAP_VUE_2_0_0_RC_11)
+    myFixture.configureVueDependencies(VueTestModule.BOOTSTRAP_VUE_2_0_0_RC_11)
     myFixture.configureByText("a-component.vue", """
       <template>
         <div>
@@ -1490,7 +1491,7 @@ var <info descr="global variable">i</info>:<info descr="exported class">SpaceInt
   }
 
   fun testCompositionApiBasic() {
-    myFixture.configureDependencies(VueTestModule.COMPOSITION_API_0_4_0)
+    myFixture.configureVueDependencies(VueTestModule.COMPOSITION_API_0_4_0)
     myFixture.configureByFile("compositeComponent1.vue")
     myFixture.checkHighlighting()
     myFixture.configureByFile("compositeComponent2.vue")
@@ -1511,19 +1512,19 @@ var <info descr="global variable">i</info>:<info descr="exported class">SpaceInt
   }
 
   fun testComputedTypeTS() {
-    myFixture.configureDependencies(VueTestModule.VUE_2_6_10)
+    myFixture.configureVueDependencies(VueTestModule.VUE_2_6_10)
     myFixture.configureByFile("computedTypeTS.vue")
     myFixture.checkHighlighting()
   }
 
   fun testComputedTypeJS() {
-    myFixture.configureDependencies(VueTestModule.VUE_2_6_10)
+    myFixture.configureVueDependencies(VueTestModule.VUE_2_6_10)
     myFixture.configureByFile("computedTypeJS.vue")
     myFixture.checkHighlighting()
   }
 
   fun testDataTypeTS() {
-    myFixture.configureDependencies(VueTestModule.VUE_2_6_10)
+    myFixture.configureVueDependencies(VueTestModule.VUE_2_6_10)
     myFixture.configureByFile("dataTypeTS.vue")
     myFixture.checkHighlighting()
   }
@@ -1543,6 +1544,28 @@ var <info descr="global variable">i</info>:<info descr="exported class">SpaceInt
     myFixture.configureByFile(getTestName(true) + ".vue")
     myFixture.checkHighlighting()
   }
+
+  fun testIndirectExport() {
+    myFixture.configureVueDependencies(VueTestModule.VUE_2_6_10)
+    myFixture.enableInspections(VueInspectionsProvider())
+    myFixture.configureByFile("indirectExport.vue")
+    myFixture.checkHighlighting()
+  }
+
+  fun testAsyncSetup() {
+    myFixture.configureVueDependencies(VueTestModule.VUE_3_0_0)
+    myFixture.enableInspections(VueInspectionsProvider())
+    myFixture.configureByFile("asyncSetup.vue")
+    myFixture.checkHighlighting()
+  }
+
+  fun testScriptSetup() {
+    myFixture.configureVueDependencies(VueTestModule.VUE_3_0_0)
+    myFixture.enableInspections(VueInspectionsProvider())
+    myFixture.configureByFile("scriptSetup.vue")
+    myFixture.checkHighlighting()
+  }
+
 }
 
 fun createTwoClassComponents(fixture: CodeInsightTestFixture, tsLang: Boolean = false) {

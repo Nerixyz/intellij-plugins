@@ -9,9 +9,6 @@ import com.intellij.lang.ecmascript6.parsing.ES6StatementParser
 import com.intellij.lang.javascript.*
 import com.intellij.lang.javascript.parsing.JSPsiTypeParser
 import com.intellij.lang.javascript.parsing.JavaScriptParser
-import com.intellij.lang.javascript.psi.JSParameter
-import com.intellij.lang.javascript.psi.JSStubElementType
-import com.intellij.lang.javascript.psi.stubs.JSParameterStub
 import com.intellij.psi.tree.IElementType
 import org.jetbrains.vuejs.VueBundle.message
 import org.jetbrains.vuejs.codeInsight.attributes.VueAttributeNameParser.*
@@ -130,7 +127,7 @@ class VueJSParser(builder: PsiBuilder, private val isJavaScript: Boolean)
     fun parseSlotPropsExpression() {
       val slotPropsParameterList = builder.mark()
       val functionParser = object : ES6FunctionParser<VueJSParser>(this@VueJSParser) {
-        override fun getParameterType(): JSStubElementType<JSParameterStub, JSParameter>? {
+        override fun getParameterType(): IElementType {
           return VueJSStubElementTypes.SLOT_PROPS_PARAMETER
         }
       }
@@ -261,7 +258,7 @@ class VueJSParser(builder: PsiBuilder, private val isJavaScript: Boolean)
 
     private var expressionNestingLevel: Int = 0
 
-    override fun parseScriptExpression(isTypeContext: Boolean) {
+    override fun parseScriptExpression() {
       throw UnsupportedOperationException()
     }
 

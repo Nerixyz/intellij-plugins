@@ -2,16 +2,13 @@ package com.intellij.javascript.flex.resolve;
 
 import com.intellij.lang.javascript.JavaScriptSupportLoader;
 import com.intellij.lang.javascript.psi.*;
-import com.intellij.lang.javascript.psi.e4x.JSE4XNamespaceReference;
 import com.intellij.lang.javascript.psi.ecmal4.JSClass;
 import com.intellij.lang.javascript.psi.ecmal4.impl.JSPackageWrapper;
 import com.intellij.lang.javascript.psi.impl.JSOffsetBasedImplicitElement;
 import com.intellij.lang.javascript.psi.resolve.*;
-import com.intellij.lang.javascript.psi.resolve.context.JSApplyCallElement;
-import com.intellij.lang.javascript.psi.resolve.context.JSApplyContextElement;
 import com.intellij.lang.javascript.psi.types.*;
+import com.intellij.lang.javascript.psi.types.evaluable.JSCustomElementType;
 import com.intellij.lang.javascript.psi.types.primitives.JSPrimitiveArrayType;
-import com.intellij.lang.javascript.psi.util.JSUtils;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.util.PsiTreeUtil;
@@ -32,20 +29,11 @@ public class ActionScriptTypeEvaluator extends JSTypeEvaluator {
   private static final String REPEATER_CLASS_FQN = "mx.core.Repeater";
 
   public ActionScriptTypeEvaluator(JSEvaluateContext context, JSTypeProcessor processor) {
-    super(context, processor, JSTypeEvaluationHelper.DEFAULT);
+    super(context, processor);
   }
 
   @Override
-  protected boolean addTypeFromDialectSpecificElements(PsiElement resolveResult) {
-    if (resolveResult instanceof JSPackageWrapper) {
-      myTypeProcessor.processResolvedElement(resolveResult, myContext);
-      return true;
-    }
-    return false;
-  }
-
-  @Override
-  protected void evaluateNewExpressionTypes(JSNewExpression newExpression) {
+  protected void evaluateNewExpressionTypes(@NotNull JSNewExpression newExpression) {
     JSExpression methodExpr = newExpression.getMethodExpression();
     if (methodExpr != null) {
       if (methodExpr instanceof JSArrayLiteralExpression) {
@@ -81,31 +69,10 @@ public class ActionScriptTypeEvaluator extends JSTypeEvaluator {
     final JSReferenceExpression expression = myContext.getProcessedExpression();
     if (expression == null) return;
 
-    PsiElement parent = expression.getParent();
-    if (parent instanceof JSExpression) parent = JSUtils.unparenthesize((JSExpression)parent);
-    String psiElementType = parent instanceof JSReferenceExpression ||
-                            JSResolveUtil.isExprInStrictTypeContext(expression) ||
-                            PsiTreeUtil.getChildOfType(expression, JSE4XNamespaceReference.class) != null || // TODO avoid it
-                            parent instanceof JSCallExpression ?
-                            resolveResult.getQualifiedName() : "Class";
-    JSTypeSource source = JSTypeSourceFactory.createTypeSource(expression);
-    JSType namedType = JSNamedType.createType(psiElementType, source, JSContext.UNKNOWN);
-    JSType type = JSTypeUtils.isActionScriptVectorType(namedType) ?
-                  JSTypeUtils.createType(JSImportHandlingUtil.resolveTypeName(expression.getText(), expression), source) :
-                  namedType;
-    final JSApplyContextElement peek = myContext.peekJSElementToApply();
-    if (peek instanceof JSApplyCallElement) {
-      // MyClass(anyVar) is cast to MyClass
-      myContext.processWithoutTopJSElementToApply(() -> addType(type, resolveResult));
+    JSType typeFromClass = ActionScriptResolveUtil.getTypeFromClass(expression, resolveResult);
+    if (typeFromClass != null) {
+      addType(typeFromClass, resolveResult);
     }
-    else {
-      addType(type, resolveResult);
-    }
-  }
-
-  @Override
-  protected boolean useVariableType(JSType type) {
-    return myContext.isJSElementsToApplyEmpty() && super.useVariableType(type);
   }
 
   /**
@@ -156,10 +123,13 @@ public class ActionScriptTypeEvaluator extends JSTypeEvaluator {
             }
         }
       }
-      return;
     }
-
-    super.addTypeFromElementResolveResult(resolveResult);
+    else if (resolveResult instanceof JSPackageWrapper) {
+      addType(new JSCustomElementType(resolveResult), null);
+    }
+    else {
+      super.addTypeFromElementResolveResult(resolveResult);
+    }
   }
 
   private static boolean isInsideRepeaterTag(@NotNull final XmlTag xmlTag) {
@@ -175,13 +145,24 @@ public class ActionScriptTypeEvaluator extends JSTypeEvaluator {
   @Override
   public void addType(@Nullable final JSType _type, @Nullable PsiElement source) {
     if (_type != null &&
-        myContext.isJSElementsToApplyEmpty() &&
         (source == null || source == EXPLICIT_TYPE_MARKER_ELEMENT)
       ) {
       // TODO [ksafonov] enforced scope (and context) should internal part of JSType.resolve()
-      JSClass jsClass = JSInheritanceUtil.withEnforcedScope(() -> _type.resolveClass(), JSResolveUtil.getResolveScope(myContext.targetFile));
-      if (jsClass != null) {
-        source = jsClass;
+      if (myContext.targetFile == null) {
+        Logger.getInstance(ActionScriptTypeEvaluator.class).error("targetFile can't be null");
+      }
+      else {
+        JSClass jsClass =
+          JSInheritanceUtil.withEnforcedScope(() -> _type.resolveClass(), JSResolveUtil.getResolveScope(myContext.targetFile));
+        if (jsClass != null) {
+          source = jsClass;
+        }
+      }
+    }
+    if (_type instanceof JSPsiBasedTypeOfType) {
+      PsiElement element = ((JSPsiBasedTypeOfType)_type).getElement();
+      if (element instanceof JSReferenceExpression && ((JSReferenceExpression)element).resolve() == element) {
+        return;
       }
     }
     super.addType(_type, source);
@@ -194,7 +175,6 @@ public class ActionScriptTypeEvaluator extends JSTypeEvaluator {
                                                @NotNull JSTypeSource typeSource) {
     String name = jsClass.getQualifiedName();
     if (name == null) {
-      Logger.getInstance(ActionScriptTypeEvaluator.class).error(new IllegalArgumentException("name can't be null"));
       return JSAnyType.get(typeSource);
     }
     return JSNamedTypeFactory.createType(name, typeSource, staticOrInstance);

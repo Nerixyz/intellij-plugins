@@ -184,7 +184,7 @@ final class BindingsTypeResolver {
         templateContextTypes.add(templateContextType);
       }
       final ProcessingContext processingContext =
-        JSTypeComparingContextService.getProcessingContextWithCache(clazz);
+        JSTypeComparingContextService.createProcessingContextWithCache(clazz);
       directive.getInputs().forEach(property -> {
         JSExpression inputExpression = inputsMap.get(property.getName());
         JSType propertyType;
@@ -207,9 +207,10 @@ final class BindingsTypeResolver {
             });
           }
           else {
-            JSGenericTypesEvaluatorBase.matchGenericTypes(new JSGenericMappings(genericArguments), processingContext,
-                                                          inputType, propertyType);
-            JSGenericTypesEvaluatorBase.widenInferredTypes(genericArguments, Collections.singletonList(propertyType), null, null);
+            JSGenericTypesEvaluatorBase
+              .matchGenericTypes(new JSGenericMappings(genericArguments), processingContext, inputType, propertyType);
+            JSGenericTypesEvaluatorBase
+              .widenInferredTypes(genericArguments, Collections.singletonList(propertyType), null, null, processingContext);
           }
         }
       });

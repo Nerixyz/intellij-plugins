@@ -27,17 +27,20 @@ import com.intellij.psi.stubs.IndexSink
 import com.intellij.psi.stubs.StubIndexKey
 import com.intellij.psi.tree.TokenSet
 import com.intellij.psi.util.PsiTreeUtil
+import com.intellij.psi.xml.XmlAttribute
 import com.intellij.psi.xml.XmlDocument
 import com.intellij.psi.xml.XmlFile
 import com.intellij.psi.xml.XmlTag
 import com.intellij.util.PathUtil
 import com.intellij.util.castSafelyTo
 import com.intellij.xml.util.HtmlUtil.SCRIPT_TAG_NAME
+import org.jetbrains.vuejs.codeInsight.es6Unquote
 import org.jetbrains.vuejs.codeInsight.getTextIfLiteral
 import org.jetbrains.vuejs.codeInsight.toAsset
 import org.jetbrains.vuejs.lang.html.VueFileType
 import org.jetbrains.vuejs.model.source.*
 import org.jetbrains.vuejs.model.source.VueComponents.Companion.isComponentDecorator
+import org.jetbrains.vuejs.model.source.VueComponents.Companion.isDefineComponentCall
 
 class VueFrameworkHandler : FrameworkIndexingHandler() {
   // 1 here we are just mapping the constants, no lifecycle needed
@@ -68,7 +71,6 @@ class VueFrameworkHandler : FrameworkIndexingHandler() {
     }
 
     private const val REQUIRE = "require"
-    private const val VUE_INSTANCE = "CombinedVueInstance"
 
     private val VUE_DESCRIPTOR_OWNERS = arrayOf(VUE_NAMESPACE, MIXIN_FUN, COMPONENT_FUN, EXTEND_FUN, DIRECTIVE_FUN, DELIMITERS_PROP,
                                                 FILTER_FUN, DEFINE_COMPONENT_FUN)
@@ -188,8 +190,10 @@ class VueFrameworkHandler : FrameworkIndexingHandler() {
     val firstProperty = obj?.firstProperty ?: return outData
     if (firstProperty == property) {
       val parent = obj.parent
-      if (parent is JSExportAssignment ||
-          (parent is JSAssignmentExpression && isDefaultExports(parent.definitionExpression?.expression))) {
+      if (parent is JSExportAssignment
+          || (parent is JSAssignmentExpression && isDefaultExports(parent.definitionExpression?.expression))
+          || parent.castSafelyTo<JSArgumentList>()?.parent
+            ?.castSafelyTo<JSCallExpression>()?.let { isDefineComponentCall(it) } == true) {
         if (isPossiblyVueContainerInitializer(obj)) {
           if (out == null) out = JSElementIndexingDataImpl()
           out.addImplicitElement(createImplicitElement(getComponentNameFromDescriptor(obj), property, VueComponentsIndex.JS_KEY))
@@ -278,7 +282,8 @@ class VueFrameworkHandler : FrameworkIndexingHandler() {
                 ?.castSafelyTo<ES6ImportedBinding>()
                 ?.context?.castSafelyTo<ES6ImportExportDeclaration>()
                 ?.fromClause
-                ?.referenceText == "\"vue-typed-mixins\"") {
+                ?.referenceText
+                ?.let { es6Unquote(it) } == "vue-typed-mixins") {
             for (arg in qualifier.arguments) {
               arg.castSafelyTo<JSReferenceExpression>()
                 ?.takeIf { !it.hasQualifier() }
@@ -373,10 +378,10 @@ class VueFrameworkHandler : FrameworkIndexingHandler() {
     return index == VueUrlIndex.KEY
   }
 
-  fun createImplicitElement(name: String, provider: PsiElement, indexKey: String,
-                            nameType: String? = null,
-                            descriptor: PsiElement? = null,
-                            isGlobal: Boolean = false): JSImplicitElementImpl {
+  private fun createImplicitElement(name: String, provider: PsiElement, indexKey: String,
+                                    nameType: String? = null,
+                                    descriptor: PsiElement? = null,
+                                    isGlobal: Boolean = false): JSImplicitElementImpl {
     val normalized = normalizeNameForIndex(name)
     val nameTypeRecord = nameType ?: ""
     val asIndexed = descriptor as? JSIndexedPropertyAccessExpression
@@ -401,20 +406,19 @@ fun resolveLocally(ref: JSReferenceExpression): List<PsiElement> {
   else emptyList()
 }
 
-fun findModule(element: PsiElement?): JSEmbeddedContent? {
-  val file = element as? XmlFile ?: element?.containingFile as? XmlFile
-  if (file != null && file.fileType == VueFileType.INSTANCE) {
-    val script = findScriptTag(file)
-    if (script != null) {
-      return PsiTreeUtil.getStubChildOfType(script, JSEmbeddedContent::class.java)
-    }
-  }
-  return null
-}
+@StubSafe
+fun findModule(element: PsiElement?): JSEmbeddedContent? =
+  (element as? XmlFile ?: element?.containingFile as? XmlFile)
+    ?.let { findScriptTag(it) }
+    ?.let { PsiTreeUtil.getStubChildOfType(it, JSEmbeddedContent::class.java) }
 
-fun findScriptTag(xmlFile: XmlFile): XmlTag? {
-  return findTopLevelVueTag(xmlFile, SCRIPT_TAG_NAME)
-}
+@StubSafe
+fun findScriptTag(xmlFile: XmlFile): XmlTag? =
+  findTopLevelVueTag(xmlFile, SCRIPT_TAG_NAME)
+
+@StubSafe
+fun hasAttribute(tag: XmlTag, attributeName: String): Boolean =
+  PsiTreeUtil.getStubChildrenOfTypeAsList(tag, XmlAttribute::class.java).any { it.name == attributeName }
 
 @StubSafe
 fun findTopLevelVueTag(xmlFile: XmlFile, tagName: String): XmlTag? {

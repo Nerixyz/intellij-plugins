@@ -11,10 +11,9 @@ import javax.swing.*;
  * DO NOT EDIT IT BY HAND, run "Generate icon classes" configuration instead
  */
 public final class AngularJSIcons {
-  private static @NotNull Icon load(@NotNull String path) {
-    return IconManager.getInstance().getIcon(path, AngularJSIcons.class);
+  private static @NotNull Icon load(@NotNull String path, long cacheKey, int flags) {
+    return IconManager.getInstance().loadRasterizedIcon(path, AngularJSIcons.class.getClassLoader(), cacheKey, flags);
   }
-
-  /** 16x16 */ public static final @NotNull Icon Angular2 = load("/icons/angular2.svg");
-  /** 16x16 */ public static final @NotNull Icon AngularJS = load("/icons/AngularJS.svg");
+  /** 16x16 */ public static final @NotNull Icon Angular2 = load("icons/angular2.svg", 6023390128352127214L, 0);
+  /** 16x16 */ public static final @NotNull Icon AngularJS = load("icons/AngularJS.svg", -1294506080931672243L, 0);
 }

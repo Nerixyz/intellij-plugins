@@ -1,4 +1,4 @@
-// Copyright 2000-2019 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2020 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package com.jetbrains.lang.dart.sdk;
 
 import com.intellij.ide.util.PropertiesComponent;
@@ -6,10 +6,11 @@ import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.ComponentWithBrowseButton;
 import com.intellij.openapi.ui.TextComponentAccessor;
+import com.intellij.openapi.util.NlsContexts;
+import com.intellij.openapi.util.NlsSafe;
 import com.intellij.openapi.util.Pair;
 import com.intellij.openapi.util.SystemInfo;
 import com.intellij.openapi.util.io.FileUtil;
-import com.intellij.openapi.util.io.FileUtilRt;
 import com.intellij.ui.ComboboxWithBrowseButton;
 import com.intellij.ui.DocumentAdapter;
 import com.intellij.ui.components.JBLabel;
@@ -28,12 +29,11 @@ import java.io.File;
 import java.io.IOException;
 import java.util.*;
 
-public class DartSdkUtil {
+public final class DartSdkUtil {
   private static final Map<Pair<File, Long>, String> ourVersions = new HashMap<>();
   private static final String DART_SDK_KNOWN_PATHS = "DART_SDK_KNOWN_PATHS";
 
-  @Nullable
-  public static String getSdkVersion(final @NotNull String sdkHomePath) {
+  public static @Nullable @NlsSafe String getSdkVersion(final @NotNull String sdkHomePath) {
     final File versionFile = new File(sdkHomePath + "/version");
     if (versionFile.isFile()) {
       final String cachedVersion = ourVersions.get(Pair.create(versionFile, versionFile.lastModified()));
@@ -74,13 +74,14 @@ public class DartSdkUtil {
     addKnownPathsToCombo(dartSdkPathComponent.getComboBox(), DART_SDK_KNOWN_PATHS, DartSdkUtil::isDartSdkHome);
     if (SystemInfo.isMac && getItemFromCombo(dartSdkPathComponent.getComboBox()).isEmpty()) {
       // no need to check folder presence here; even if it doesn't exist - that's the best we can suggest
-      dartSdkPathComponent.getComboBox().getEditor().setItem("/usr/local/opt/dart/libexec");
+      @NlsSafe String path = "/usr/local/opt/dart/libexec";
+      dartSdkPathComponent.getComboBox().getEditor().setItem(path);
     }
 
     final String sdkHomePath = getItemFromCombo(dartSdkPathComponent.getComboBox());
     versionLabel.setText(sdkHomePath.isEmpty() ? "" : getSdkVersion(sdkHomePath));
 
-    final TextComponentAccessor<JComboBox> textComponentAccessor = new TextComponentAccessor<JComboBox>() {
+    final TextComponentAccessor<JComboBox> textComponentAccessor = new TextComponentAccessor<>() {
       @Override
       public String getText(final JComboBox component) {
         return getItemFromCombo(component);
@@ -91,17 +92,18 @@ public class DartSdkUtil {
         if (!text.isEmpty() && !isDartSdkHome(text)) {
           final String probablySdkPath = text + "/dart-sdk";
           if (isDartSdkHome(probablySdkPath)) {
-            component.getEditor().setItem(FileUtilRt.toSystemDependentName(probablySdkPath));
+            component.getEditor().setItem(FileUtil.toSystemDependentName(probablySdkPath));
             return;
           }
         }
 
-        component.getEditor().setItem(FileUtilRt.toSystemDependentName(text));
+        component.getEditor().setItem(FileUtil.toSystemDependentName(text));
       }
     };
 
     final ComponentWithBrowseButton.BrowseFolderActionListener<JComboBox> browseFolderListener =
-      new ComponentWithBrowseButton.BrowseFolderActionListener<>(DartBundle.message("button.browse.dialog.title.select.dart.sdk.path"), null, dartSdkPathComponent, project,
+      new ComponentWithBrowseButton.BrowseFolderActionListener<>(DartBundle.message("button.browse.dialog.title.select.dart.sdk.path"),
+                                                                 null, dartSdkPathComponent, project,
                                                                  FileChooserDescriptorFactory.createSingleFolderDescriptor(),
                                                                  textComponentAccessor);
     dartSdkPathComponent.addActionListener(browseFolderListener);
@@ -142,7 +144,7 @@ public class DartSdkUtil {
 
     final String[] knownPaths = PropertiesComponent.getInstance().getValues(propertyKey);
     if (knownPaths != null && knownPaths.length > 0) {
-      for (String path: knownPaths) {
+      for (String path : knownPaths) {
         final String pathSD = FileUtil.toSystemDependentName(path);
         if (!pathSD.equals(currentPath) && pathChecker.fun(path)) {
           validPathsForUI.add(pathSD);
@@ -182,8 +184,7 @@ public class DartSdkUtil {
     }
   }
 
-  @Nullable
-  public static String getErrorMessageIfWrongSdkRootPath(final @NotNull String sdkRootPath) {
+  public static @Nullable @NlsContexts.Label String getErrorMessageIfWrongSdkRootPath(final @NotNull String sdkRootPath) {
     if (sdkRootPath.isEmpty()) return DartBundle.message("error.path.to.sdk.not.specified");
 
     final File sdkRoot = new File(sdkRootPath);

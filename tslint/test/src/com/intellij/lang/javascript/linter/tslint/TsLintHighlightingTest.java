@@ -1,8 +1,9 @@
+// Copyright 2000-2020 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package com.intellij.lang.javascript.linter.tslint;
 
 import com.intellij.codeInspection.InspectionProfileEntry;
-import com.intellij.lang.javascript.JavaScriptBundle;
 import com.intellij.lang.javascript.JSTestUtils;
+import com.intellij.lang.javascript.JavaScriptBundle;
 import com.intellij.lang.javascript.linter.AutodetectLinterPackage;
 import com.intellij.lang.javascript.linter.LinterHighlightingTest;
 import com.intellij.lang.javascript.linter.tslint.config.TsLintConfiguration;
@@ -12,13 +13,17 @@ import com.intellij.lang.javascript.service.JSLanguageServiceUtil;
 import com.intellij.util.LineSeparator;
 import org.jetbrains.annotations.NotNull;
 
+import static com.intellij.lang.javascript.linter.tslint.TsLintTestUtil.BASE_TEST_DATA_PATH;
+
 /**
  * @author Irina.Chernushina on 6/4/2015.
  */
 public class TsLintHighlightingTest extends LinterHighlightingTest {
+
   @Override
-  protected String getBasePath() {
-    return TsLintTestUtil.getTestDataRelativePath() + "/highlighting/";
+  protected void setUp() throws Exception {
+    super.setUp();
+    myFixture.setTestDataPath(BASE_TEST_DATA_PATH + "/highlighting/");
   }
 
   @NotNull
@@ -86,7 +91,7 @@ public class TsLintHighlightingTest extends LinterHighlightingTest {
   }
 
   public void testLineSeparatorsWin() {
-    doEditorHighlightingTest("data.ts",() -> JSTestUtils.ensureLineSeparators(myFixture.getFile(), LineSeparator.CRLF));
+    doEditorHighlightingTest("data.ts", () -> JSTestUtils.ensureLineSeparators(myFixture.getFile(), LineSeparator.CRLF));
   }
 
   public void testTimeout() {
@@ -125,23 +130,23 @@ public class TsLintHighlightingTest extends LinterHighlightingTest {
   }
 
   public void testSuppressRuleForLine() {
-    doFixTest("main", JavaScriptBundle.message("javascript.linter.suppress.rules.for.line.description", "'quotemark'"));
+    doFixTest("main", JavaScriptBundle.message("javascript.linter.suppress.rule.for.line.description", "quotemark"));
   }
 
   public void testSuppressRuleForLineAddsToExistingComment() {
-    doFixTest("main", JavaScriptBundle.message("javascript.linter.suppress.rules.for.line.description", "'quotemark'"));
+    doFixTest("main", JavaScriptBundle.message("javascript.linter.suppress.rule.for.line.description", "quotemark"));
   }
 
   public void testSuppressRuleForFileAddsToExistingComment() {
-    doFixTest("main", JavaScriptBundle.message("javascript.linter.suppress.rules.for.file.description", "'quotemark'"));
+    doFixTest("main", JavaScriptBundle.message("javascript.linter.suppress.rule.for.file.description", "quotemark"));
   }
 
   public void testSuppressAllRulesForLine() {
-    doFixTest("main", JavaScriptBundle.message("javascript.linter.suppress.rules.for.line.description", "all TSLint rules"));
+    doFixTest("main", JavaScriptBundle.message("javascript.linter.suppress.all.rules.for.line.description", "TSLint"));
   }
 
   public void testSuppressAllRulesForLineOverwritesExistingSuppressionForRule() {
-    doFixTest("main", JavaScriptBundle.message("javascript.linter.suppress.rules.for.line.description", "all TSLint rules"));
+    doFixTest("main", JavaScriptBundle.message("javascript.linter.suppress.all.rules.for.line.description", "TSLint"));
   }
 
   private void doFixTest(String mainFileName, String intentionDescription) {

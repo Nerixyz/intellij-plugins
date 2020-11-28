@@ -30,8 +30,10 @@ import aQute.bnd.build.Workspace;
 import aQute.bnd.osgi.*;
 import aQute.service.reporter.Report;
 import com.intellij.openapi.diagnostic.Logger;
+import com.intellij.openapi.util.NlsSafe;
 import com.intellij.openapi.util.io.FileUtil;
 import com.intellij.openapi.util.text.StringUtil;
+import com.intellij.util.containers.ContainerUtil;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.osgi.jps.model.LibraryBundlificationRule;
@@ -44,7 +46,8 @@ import java.util.jar.Attributes;
 import java.util.jar.JarFile;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
+
+import static org.jetbrains.osgi.jps.OsgiJpsBundle.message;
 
 /**
  * Class which wraps bnd and integrates it into IntelliJ.
@@ -92,7 +95,7 @@ public class BndWrapper {
   @Nullable
   private File wrap(@NotNull File sourceFile, @NotNull File outputDir, @NotNull List<LibraryBundlificationRule> rules) throws OsgiBuildException {
     if (!sourceFile.isFile()) {
-      throw new OsgiBuildException("The library '" + sourceFile + "' does not exist - please check module dependencies.");
+      throw new OsgiBuildException(message("bnd.wrapper.library.not.found", sourceFile));
     }
 
     File targetFile = new File(outputDir, sourceFile.getName());
@@ -123,10 +126,10 @@ public class BndWrapper {
   // internal function which does the actual wrapping. 90% borrowed from the Bnd source code.
   private void doWrap(@NotNull File inputJar, @NotNull File outputJar, @NotNull Map<String, String> properties) throws OsgiBuildException {
     if (!FileUtil.delete(outputJar)) {
-      throw new OsgiBuildException("Can't delete outdated bundle '" + outputJar + "'");
+      throw new OsgiBuildException(message("bnd.wrapper.cannot.delete.bundle", outputJar));
     }
     if (!FileUtil.createParentDirs(outputJar)) {
-      throw new OsgiBuildException("Can't create output directory for '" + outputJar + "'");
+      throw new OsgiBuildException(message("bnd.wrapper.cannot.create.output", outputJar));
     }
 
     try (Analyzer analyzer = new ReportingAnalyzer(myReporter)) {
@@ -142,7 +145,7 @@ public class BndWrapper {
         Pattern p = Pattern.compile("(" + Verifier.SYMBOLICNAME.pattern() + ")(-[0-9])?.*\\.jar");
         Matcher m = p.matcher(inputJar.getName());
         if (!m.matches()) {
-          throw new OsgiBuildException("Can't calculate output bundle name for '" + inputJar + "' - rename file or use -properties");
+          throw new OsgiBuildException(message("bnd.wrapper.cannot.name.bundle", inputJar));
         }
         analyzer.setProperty(Constants.BUNDLE_SYMBOLICNAME, m.group(1));
       }
@@ -162,9 +165,8 @@ public class BndWrapper {
         analyzer.setProperty(Constants.BUNDLE_VERSION, version);
       }
 
-      analyzer.calcManifest();
-
       try (Jar jar = analyzer.getJar()) {
+        jar.setManifest(analyzer.calcManifest());
         jar.write(outputJar);
       }
 
@@ -175,7 +177,7 @@ public class BndWrapper {
       throw e;
     }
     catch (Exception e) {
-      throw new OsgiBuildException("There was an unexpected problem when trying to bundlify", e, null);
+      throw new OsgiBuildException(message("bnd.wrapper.unknown.error"), e, null);
     }
   }
 
@@ -248,12 +250,12 @@ public class BndWrapper {
           p.load(stream);
           String value = p.getProperty(Attributes.Name.MANIFEST_VERSION.toString());
           if (StringUtil.isEmptyOrSpaces(value)) {
-            String message = "Manifest misses a Manifest-Version entry. This may produce an empty manifest in the resulting bundle.";
+            String message = message("bnd.wrapper.manifest.version.missing");
             myReporter.warning(message, null, manifest, -1);
           }
         }
         catch (Exception e) {
-          myReporter.warning("Can't read manifest: " + e.getMessage(), e, manifest, -1);
+          myReporter.warning(message("bnd.wrapper.manifest.reading.failed", e.getMessage()), e, manifest, -1);
         }
       }
     }
@@ -267,7 +269,7 @@ public class BndWrapper {
     builder.getErrors().forEach(s -> reportProblem(s, builder.getLocation(s), true));
   }
 
-  private void reportProblem(String message, Report.Location location, boolean error) {
+  private void reportProblem(@NlsSafe String message, Report.Location location, boolean error) {
     String sourcePath = null;
     int lineNum = -1;
     if (location != null) {
@@ -284,18 +286,6 @@ public class BndWrapper {
     }
   }
 
-  /**
-   * Creates an output dir relative to a module's one.
-   */
-  @NotNull
-  public static File getOutputDir(@NotNull File moduleOutputDir) throws OsgiBuildException {
-    File outputDir = new File(moduleOutputDir.getParent(), "bundles");
-    if (!outputDir.exists() && !outputDir.mkdirs()) {
-      throw new OsgiBuildException("Can't create output directory '" + outputDir + "'. Please check file permissions.");
-    }
-    return outputDir;
-  }
-
   @NotNull
   public static List<String> getBundleNames(@NotNull File bndFile) {
     try (Builder builder = new Builder()) {
@@ -303,7 +293,7 @@ public class BndWrapper {
       builder.setPedantic(false);
       List<Builder> subs = builder.getSubBuilders();
       if (subs.size() > 0 && subs.get(0) != builder) {
-        return subs.stream().map(sub -> sub.getBsn() + ".jar").collect(Collectors.toList());
+        return ContainerUtil.map(subs, sub -> sub.getBsn() + ".jar");
       }
     }
     catch (Exception e) {

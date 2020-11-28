@@ -48,6 +48,7 @@ import org.osmorc.frameworkintegration.FrameworkInstanceDefinition;
 import org.osmorc.frameworkintegration.FrameworkIntegrator;
 import org.osmorc.frameworkintegration.FrameworkIntegratorRegistry;
 import org.osmorc.frameworkintegration.FrameworkRunner;
+import org.osmorc.i18n.OsmorcBundle;
 import org.osmorc.make.BundleCompiler;
 import org.osmorc.run.ui.SelectedBundle;
 
@@ -73,11 +74,11 @@ public class OsgiRunState extends JavaCommandLineState {
 
     FrameworkInstanceDefinition instance = myRunConfiguration.getInstanceToUse();
     if (instance == null) {
-      throw new CantRunException("Incorrect OSGi run configuration: framework not set");
+      throw new CantRunException(OsmorcBundle.message("run.configuration.no.framework"));
     }
     FrameworkIntegrator integrator = FrameworkIntegratorRegistry.getInstance().findIntegratorByInstanceDefinition(instance);
     if (integrator == null) {
-      throw new CantRunException("Internal error: missing integrator for " + instance);
+      throw new CantRunException(OsmorcBundle.message("run.configuration.missing.integrator", instance));
     }
     myRunner = integrator.createFrameworkRunner();
 
@@ -109,7 +110,7 @@ public class OsgiRunState extends JavaCommandLineState {
     final Ref<List<SelectedBundle>> result = Ref.create();
     final Ref<ExecutionException> error = Ref.create();
 
-    ProgressManager.getInstance().run(new Task.Modal(myRunConfiguration.getProject(), "Preparing Bundles...", false) {
+    ProgressManager.getInstance().run(new Task.Modal(myRunConfiguration.getProject(), OsmorcBundle.message("run.configuration.progress.preparing.bundles"), false) {
       @Override
       public void run(@NotNull ProgressIndicator progressIndicator) {
         progressIndicator.setIndeterminate(false);
@@ -120,23 +121,22 @@ public class OsgiRunState extends JavaCommandLineState {
             // the bundles are module names, by now we try to find jar files in the output directory which we can then install
             ModuleManager moduleManager = ModuleManager.getInstance(myRunConfiguration.getProject());
             BundleCompiler bundleCompiler = new BundleCompiler(progressIndicator);
-            int bundleCount = myRunConfiguration.getBundlesToDeploy().size();
-            for (int i = 0; i < bundleCount; i++) {
-              progressIndicator.setFraction((double)i / bundleCount);
 
-              SelectedBundle selectedBundle = myRunConfiguration.getBundlesToDeploy().get(i);
+            List<SelectedBundle> bundlesToDeploy = myRunConfiguration.getBundlesToDeploy();
+            for (int i = 0; i < bundlesToDeploy.size(); i++) {
+              progressIndicator.setFraction((double)i / bundlesToDeploy.size());
+
+              SelectedBundle selectedBundle = bundlesToDeploy.get(i);
               if (selectedBundle.isModule()) {
                 // use the output jar name if it is a module
                 String name = selectedBundle.getName();
                 Module module = moduleManager.findModuleByName(name);
-                if (module == null) {
-                  throw new CantRunException("Module '" + name + "' no longer exists. Please check your run configuration.");
-                }
+                if (module == null) throw new CantRunException(OsmorcBundle.message("run.configuration.missing.module", name));
                 OsmorcFacet facet = OsmorcFacet.getInstance(module);
-                if (facet == null) {
-                  throw new CantRunException("Module '" + name + "' has no OSGi facet. Please check your run configuration.");
-                }
-                selectedBundle.setBundlePath(facet.getConfiguration().getJarFileLocation());
+                if (facet == null) throw new CantRunException(OsmorcBundle.message("run.configuration.missing.facet", name));
+                String jar = facet.getConfiguration().getJarFileLocation();
+                if (!new File(jar).exists()) throw new CantRunException(OsmorcBundle.message("run.configuration.missing.bundle", jar));
+                selectedBundle.setBundlePath(jar);
                 selectedBundles.add(selectedBundle);
                 // add all the library dependencies of the bundle
                 List<String> paths = bundleCompiler.bundlifyLibraries(module);
@@ -159,7 +159,7 @@ public class OsgiRunState extends JavaCommandLineState {
                 String key = CachingBundleInfoProvider.getBundleSymbolicName(path) + ':' + CachingBundleInfoProvider.getBundleVersion(path);
                 SelectedBundle previous = filter.put(key, selectedBundle);
                 if (previous != null) {
-                  throw new CantRunException("Bundles have same symbolic name and version (" + key + "):\n" + previous + "\n" + selectedBundle);
+                  throw new CantRunException(OsmorcBundle.message("run.configuration.bundles.clash", key, previous, selectedBundle));
                 }
               }
             }
@@ -177,7 +177,7 @@ public class OsgiRunState extends JavaCommandLineState {
           }
           catch (Throwable t) {
             LOG.error(t);
-            error.set(new CantRunException("Internal error: " + t.getMessage()));
+            error.set(new CantRunException(OsmorcBundle.message("run.configuration.internal.error", t.getMessage())));
           }
         });
       }

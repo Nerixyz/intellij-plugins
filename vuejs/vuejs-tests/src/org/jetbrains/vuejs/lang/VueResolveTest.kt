@@ -8,7 +8,6 @@ import com.intellij.lang.javascript.psi.ecma6.TypeScriptFunction
 import com.intellij.lang.javascript.psi.ecma6.TypeScriptPropertySignature
 import com.intellij.lang.javascript.psi.impl.JSReferenceExpressionImpl
 import com.intellij.lang.javascript.psi.stubs.JSImplicitElement
-import com.intellij.openapi.application.PathManager
 import com.intellij.openapi.util.Trinity
 import com.intellij.openapi.util.text.StringUtil
 import com.intellij.psi.xml.XmlAttribute
@@ -23,7 +22,7 @@ import org.jetbrains.vuejs.model.VueNamedSymbol
 import org.jetbrains.vuejs.model.VueRegularComponent
 
 class VueResolveTest : BasePlatformTestCase() {
-  override fun getTestDataPath(): String = PathManager.getHomePath() + "/contrib/vuejs/vuejs-tests/testData/resolve/"
+  override fun getTestDataPath(): String = getVueTestDataPath() + "/resolve/"
 
   fun testResolveInjectionToPropInObject() {
     myFixture.configureByText("ResolveToPropInObject.vue", """
@@ -1416,7 +1415,7 @@ const props = {seeMe: {}}
   }
 
   fun testResolveIntoVueDefinitions() {
-    myFixture.configureDependencies(VueTestModule.VUE_2_5_3)
+    myFixture.configureVueDependencies(VueTestModule.VUE_2_5_3)
     myFixture.configureByText("ResolveIntoVueDefinitions.vue", """
 <script>
   export default {
@@ -1433,7 +1432,7 @@ const props = {seeMe: {}}
   }
 
   fun testResolveElementUiComponent() {
-    myFixture.configureDependencies(VueTestModule.ELEMENT_UI_2_0_5)
+    myFixture.configureVueDependencies(VueTestModule.ELEMENT_UI_2_0_5)
     val testData = arrayOf(
       Trinity("el-col", "ElCol", "col.js"),
       Trinity("el-button", "ElButton", "button.vue"),
@@ -1446,7 +1445,7 @@ const props = {seeMe: {}}
   }
 
   fun testResolveMintUiComponent() {
-    myFixture.configureDependencies(VueTestModule.MINT_UI_2_2_3)
+    myFixture.configureVueDependencies(VueTestModule.MINT_UI_2_2_3)
     val testData = arrayOf(
       Trinity("mt-field", "mt-field", "field.vue"),
       Trinity("mt-swipe", "mt-swipe", "swipe.vue"),
@@ -1461,7 +1460,7 @@ const props = {seeMe: {}}
   // Resolve into web-types libraries not supported for now.
   @Suppress("TestFunctionName", "unused")
   fun _testResolveVuetifyComponent() {
-    myFixture.configureDependencies(VueTestModule.VUETIFY_0_17_2)
+    myFixture.configureVueDependencies(VueTestModule.VUETIFY_0_17_2)
     val testData = arrayOf(
       Trinity("v-list", "v-list", "VList.js"),
       Trinity("v-list-tile-content", "v-list-tile-content", "index.js")
@@ -1892,7 +1891,7 @@ export default class UsageComponent extends Vue {
   }
 
   fun testVueDefaultSymbols() {
-    myFixture.configureDependencies(VueTestModule.VUE_2_5_3)
+    myFixture.configureVueDependencies(VueTestModule.VUE_2_5_3)
     myFixture.configureByFile("vueDefaultSymbols.vue")
     assertEquals("vue.d.ts",
                  myFixture.resolveReference("\$<caret>slots").containingFile.name)
@@ -1956,7 +1955,7 @@ export default class UsageComponent extends Vue {
   }
 
   fun testMixinExtend() {
-    myFixture.configureDependencies(VUE_2_6_10)
+    myFixture.configureVueDependencies(VUE_2_6_10)
     myFixture.copyDirectoryToProject("vue-sfc-extend-mixin", ".")
     myFixture.configureFromTempProjectFile("test.vue")
     TestCase.assertEquals(
@@ -1975,7 +1974,7 @@ export default class UsageComponent extends Vue {
   }
 
   fun testTypedMixins() {
-    myFixture.configureDependencies(VUE_2_6_10)
+    myFixture.configureVueDependencies(VUE_2_6_10)
     myFixture.copyDirectoryToProject("vue-sfc-typed-mixins", ".")
     myFixture.configureFromTempProjectFile("component.vue")
     TestCase.assertEquals(

@@ -1,31 +1,36 @@
 // Copyright 2000-2020 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package org.jetbrains.vuejs.model.source
 
+import com.intellij.lang.ecmascript6.resolve.ES6PsiUtil
 import com.intellij.lang.javascript.psi.*
 import com.intellij.lang.javascript.psi.ecma6.TypeScriptTypeAlias
 import com.intellij.lang.javascript.psi.stubs.JSImplicitElement
-import com.intellij.lang.javascript.psi.types.JSAliasTypeImpl
-import com.intellij.lang.javascript.psi.types.JSGenericTypeImpl
-import com.intellij.lang.javascript.psi.types.JSTypeImpl
-import com.intellij.lang.javascript.psi.types.JSTypeSubstitutionContextImpl
+import com.intellij.lang.javascript.psi.types.*
 import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.psi.PsiElement
 import com.intellij.psi.util.CachedValueProvider
 import com.intellij.psi.util.CachedValuesManager
+import com.intellij.psi.util.PsiTreeUtil
+import com.intellij.psi.xml.XmlFile
 import com.intellij.util.castSafelyTo
+import org.jetbrains.vuejs.codeInsight.SETUP_ATTRIBUTE_NAME
+import org.jetbrains.vuejs.codeInsight.resolveElementTo
 import org.jetbrains.vuejs.codeInsight.resolveSymbolFromNodeModule
 import org.jetbrains.vuejs.index.COMPOSITION_API_MODULE
 import org.jetbrains.vuejs.index.VUE_MODULE
+import org.jetbrains.vuejs.index.findScriptTag
+import org.jetbrains.vuejs.index.hasAttribute
 import org.jetbrains.vuejs.model.*
 import org.jetbrains.vuejs.model.source.VueContainerInfoProvider.VueContainerInfo
 
 class VueCompositionInfoProvider : VueContainerInfoProvider {
 
-  override fun getInfo(descriptor: VueSourceEntityDescriptor): VueContainerInfo? {
-    return descriptor.initializer?.let { VueCompositionInfo(it) }
-  }
+  override fun getInfo(descriptor: VueSourceEntityDescriptor): VueContainerInfo? =
+    descriptor.source
+      .takeIf { it is JSObjectLiteralExpression || it is XmlFile }
+      ?.let { VueCompositionInfo(it) }
 
-  class VueCompositionInfo(val initializer: JSObjectLiteralExpression) : VueContainerInfo {
+  class VueCompositionInfo(val initializer: PsiElement /* JSObjectLiteralExpression | XmlFile */) : VueContainerInfo {
 
     override val computed: List<VueComputedProperty>
       get() = rawBindings.filterIsInstance(VueComputedProperty::class.java)
@@ -45,10 +50,10 @@ class VueCompositionInfoProvider : VueContainerInfoProvider {
                           ?: resolveSymbolFromNodeModule(
                             initializer, "$COMPOSITION_API_MODULE/dist/reactivity/ref",
                             "UnwrapRef", TypeScriptTypeAlias::class.java)
+
+
           CachedValueProvider.Result.create(
-            initializer.findProperty(SETUP_METHOD)
-              ?.castSafelyTo<JSFunctionProperty>()
-              ?.returnType
+            getSetupFunctionType(initializer)
               ?.asRecordType()
               ?.properties
               ?.mapNotNull { mapSignatureToRawBinding(it, context, unwrapRef) }
@@ -57,9 +62,31 @@ class VueCompositionInfoProvider : VueContainerInfoProvider {
         }
       }
 
+    private fun getSetupFunctionType(initializer: PsiElement /* JSObjectLiteralExpression | XmlFile */): JSType? =
+      when (initializer) {
+        is JSObjectLiteralExpression -> resolveElementTo(initializer.findProperty(SETUP_METHOD), JSFunction::class)
+          ?.castSafelyTo<JSFunction>()
+          ?.returnType
+          ?.let { returnType ->
+            (returnType as? JSAsyncReturnType)
+              ?.substitute()
+              ?.castSafelyTo<JSGenericTypeImpl>()
+              ?.takeIf { (it.type as? JSTypeImpl)?.typeText == "Promise" }
+              ?.arguments
+              ?.getOrNull(0)
+            ?: returnType
+          }
+        is XmlFile -> findScriptTag(initializer)
+          ?.takeIf { hasAttribute(it, SETUP_ATTRIBUTE_NAME) }
+          ?.let { PsiTreeUtil.getStubChildOfType(it, JSEmbeddedContent::class.java) }
+          ?.takeIf { ES6PsiUtil.isEmbeddedModule(it) }
+          ?.let { JSModuleTypeImpl(it, true) }
+        else -> null
+      }
+
     private fun mapSignatureToRawBinding(signature: JSRecordType.PropertySignature,
                                          context: JSTypeSubstitutionContextImpl,
-                                         unwrapRef: TypeScriptTypeAlias?): VueNamedSymbol? {
+                                         unwrapRef: TypeScriptTypeAlias?): VueNamedSymbol {
       val name = signature.memberName
       var signatureType = signature.jsType?.substitute(context)
       var isReadOnly = false

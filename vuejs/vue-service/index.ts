@@ -10,6 +10,16 @@ module.exports = function init(
   if (!patched) {
     patched = true
 
+    // Don't output compilation results of `.vue` files. The DefaultSessionExtension#getFileWrite should actually be patched
+    // to not populate the output list
+    const _writeFile = ts_impl.sys.writeFile
+    ts_impl.sys.writeFile = function writeFilePatched(path: string, data: string, writeByteOrderMark?: boolean) {
+      if (path.endsWith(".vue.d.ts") || path.endsWith(".vue.js") || path.endsWith(".vue.js.map")) {
+        return
+      }
+      _writeFile(path, data, writeByteOrderMark);
+    }
+
     // Detect whether script kind has changed and if so, drop the whole program and patch compiler host
     const _createProgram = ts_impl.createProgram
     ts_impl.createProgram = function createProgram(rootNamesOrOptions: any): ts.Program {
@@ -90,6 +100,25 @@ module.exports = function init(
 
   }
 
+  function myLoadWithLocalCache<T>(names: string[], containingFile: string, redirectedReference: object | undefined, loader: (name: string, containingFile: string, redirectedReference: object | undefined) => T): T[] {
+    if (names.length === 0) {
+      return [];
+    }
+    const resolutions: T[] = [];
+    const cache = new Map<string, T>();
+    for (const name of names) {
+      let result: T;
+      if (cache.has(name)) {
+        result = cache.get(name)!;
+      }
+      else {
+        cache.set(name, result = loader(name, containingFile, redirectedReference));
+      }
+      resolutions.push(result);
+    }
+    return resolutions;
+  }
+
   return {
     create(info: ts.server.PluginCreateInfo): ts.LanguageService {
 
@@ -98,6 +127,7 @@ module.exports = function init(
       const tsLsHost = info.languageServiceHost;
       const project = info.project;
       const compilerHost = <ts.CompilerHost><any>project
+      const getCanonicalFileName = ts_impl.sys.useCaseSensitiveFileNames ? toFileNameLowerCase : identity;
 
       // Allow resolve into Vue files
       const vue_sys = {
@@ -111,7 +141,7 @@ module.exports = function init(
         }
       }
       let moduleResolutionCache = ts_impl.createModuleResolutionCache(project.getCurrentDirectory(),
-        (x: any) => compilerHost.getCanonicalFileName(x), project.getCompilerOptions());
+        (x: any) => (compilerHost.getCanonicalFileName ?? getCanonicalFileName)(x), project.getCompilerOptions());
       const loader = (moduleName: string, containingFile: string, redirectedReference: any) => {
         const tsResolvedModule = ts_impl.resolveModuleName(moduleName, containingFile, project.getCompilerOptions(),
           vue_sys, moduleResolutionCache, redirectedReference).resolvedModule!;
@@ -125,7 +155,7 @@ module.exports = function init(
         return tsResolvedModule
       }
       tsLsHost.resolveModuleNames = (moduleNames: any, containingFile: any, _reusedNames: any, redirectedReference: any) =>
-        (<any>ts_impl).loadWithLocalCache(moduleNames, containingFile, redirectedReference, loader);
+        ((<any>ts_impl).loadWithLocalCache || myLoadWithLocalCache)(moduleNames, containingFile, redirectedReference, loader);
 
       // Strip non-TS content from the script
       const _getScriptSnapshot = tsLsHost.getScriptSnapshot;
@@ -152,3 +182,14 @@ module.exports = function init(
     }
   };
 };
+
+/* Copied from TS compiler/core.ts */
+
+function identity<T>(x: T) { return x; }
+function toLowerCase(x: string) { return x.toLowerCase(); }
+const fileNameLowerCaseRegExp = /[^\u0130\u0131\u00DFa-z0-9\\/:\-_. ]+/g;
+function toFileNameLowerCase(x: string) {
+  return fileNameLowerCaseRegExp.test(x) ?
+    x.replace(fileNameLowerCaseRegExp, toLowerCase) :
+    x;
+}

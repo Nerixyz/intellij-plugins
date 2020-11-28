@@ -2,36 +2,29 @@
 package org.jetbrains.vuejs.model.source
 
 import com.intellij.codeInsight.completion.CompletionUtil
+import com.intellij.lang.ecmascript6.psi.ES6ImportedBinding
 import com.intellij.lang.javascript.JSElementTypes
-import com.intellij.lang.javascript.JSStubElementTypes
 import com.intellij.lang.javascript.psi.*
 import com.intellij.lang.javascript.psi.stubs.JSImplicitElement
 import com.intellij.lang.javascript.psi.types.JSTypeSourceFactory
 import com.intellij.lang.javascript.psi.types.evaluable.JSApplyCallType
-import com.intellij.lang.javascript.psi.util.JSStubBasedPsiTreeUtil
 import com.intellij.psi.PsiElement
 import com.intellij.psi.StubBasedPsiElement
 import com.intellij.psi.impl.source.html.HtmlFileImpl
 import com.intellij.psi.search.GlobalSearchScope
 import com.intellij.psi.stubs.StubIndexKey
-import com.intellij.psi.tree.TokenSet
 import com.intellij.psi.util.PsiTreeUtil
+import com.intellij.psi.xml.XmlTag
 import com.intellij.util.castSafelyTo
 import one.util.streamex.StreamEx
-import org.jetbrains.vuejs.codeInsight.getJSTypeFromPropOptions
-import org.jetbrains.vuejs.codeInsight.getRequiredFromPropOptions
-import org.jetbrains.vuejs.codeInsight.getTextIfLiteral
-import org.jetbrains.vuejs.codeInsight.objectLiteralFor
-import org.jetbrains.vuejs.index.LOCAL
-import org.jetbrains.vuejs.index.VueExtendsBindingIndex
-import org.jetbrains.vuejs.index.VueMixinBindingIndex
-import org.jetbrains.vuejs.index.resolve
+import org.jetbrains.vuejs.codeInsight.*
+import org.jetbrains.vuejs.index.*
 import org.jetbrains.vuejs.model.*
 import org.jetbrains.vuejs.model.source.VueComponents.Companion.getComponentDescriptor
 
 class VueDefaultContainerInfoProvider : VueContainerInfoProvider.VueInitializedContainerInfoProvider(::VueSourceContainerInfo) {
 
-  private class VueSourceContainerInfo(declaration: JSObjectLiteralExpression) : VueInitializedContainerInfo(declaration) {
+  private class VueSourceContainerInfo(declaration: JSElement) : VueInitializedContainerInfo(declaration) {
     override val data: List<VueDataProperty> get() = get(DATA)
     override val computed: List<VueComputedProperty> get() = get(COMPUTED)
     override val methods: List<VueMethod> get() = get(METHODS)
@@ -59,28 +52,7 @@ class VueDefaultContainerInfoProvider : VueContainerInfoProvider.VueInitializedC
       val Filters = MemberReader(FILTERS_PROP)
       val Delimiters = MemberReader(DELIMITERS_PROP, true, false)
       val Model = MemberReader(MODEL_PROP)
-      val Data = object : MemberReader(DATA_PROP) {
-        override fun getObjectLiteralFromResolved(resolved: PsiElement): JSObjectLiteralExpression? =
-          findReturnedObjectLiteral(resolved)
-
-        override fun getObjectLiteral(property: JSProperty): JSObjectLiteralExpression? {
-          val function = property.tryGetFunctionInitializer() ?: return null
-          return findReturnedObjectLiteral(function)
-        }
-      }
-
-      private fun findReturnedObjectLiteral(resolved: PsiElement): JSObjectLiteralExpression? {
-        if (resolved !is JSFunction) return null
-        return JSStubBasedPsiTreeUtil.findDescendants<JSObjectLiteralExpression>(
-          resolved, TokenSet.create(
-          JSStubElementTypes.OBJECT_LITERAL_EXPRESSION))
-          .find {
-            it.context == resolved ||
-            it.context is JSParenthesizedExpression && it.context?.context == resolved ||
-            it.context is JSReturnStatement
-          }
-      }
-
+      val Data = MemberReader(DATA_PROP, canBeFunctionResult = true)
     }
 
     private val EXTENDS = MixinsAccessor(EXTENDS_PROP, VueExtendsBindingIndex.KEY)
@@ -100,7 +72,7 @@ class VueDefaultContainerInfoProvider : VueContainerInfoProvider.VueInitializedC
   }
 
   private class ExtendsCallAccessor : ListAccessor<VueMixin>() {
-    override fun build(declaration: JSObjectLiteralExpression): List<VueMixin> =
+    override fun build(declaration: JSElement): List<VueMixin> =
       declaration.context
         ?.let { if (it is JSArgumentList) it.context else it }
         ?.castSafelyTo<JSCallExpression>()
@@ -118,8 +90,9 @@ class VueDefaultContainerInfoProvider : VueContainerInfoProvider.VueInitializedC
                                private val indexKey: StubIndexKey<String, JSImplicitElementProvider>)
     : ListAccessor<VueMixin>() {
 
-    override fun build(declaration: JSObjectLiteralExpression): List<VueMixin> {
-      val mixinsProperty = declaration.findProperty(propertyName) ?: return emptyList()
+    override fun build(declaration: JSElement): List<VueMixin> {
+      val mixinsProperty = declaration.castSafelyTo<JSObjectLiteralExpression>()
+                             ?.findProperty(propertyName) ?: return emptyList()
       val original = CompletionUtil.getOriginalOrSelf<PsiElement>(mixinsProperty)
       val referencedMixins: List<VueMixin> =
         resolve(LOCAL, GlobalSearchScope.fileScope(mixinsProperty.containingFile.originalFile), indexKey)
@@ -146,7 +119,7 @@ class VueDefaultContainerInfoProvider : VueContainerInfoProvider.VueInitializedC
   }
 
   private class DirectivesAccessor : MapAccessor<VueDirective>() {
-    override fun build(declaration: JSObjectLiteralExpression): Map<String, VueDirective> {
+    override fun build(declaration: JSElement): Map<String, VueDirective> {
       return StreamEx.of(ContainerMember.Directives.readMembers(declaration))
         .mapToEntry({ it.first }, {
           (VueComponents.meaningfulExpression(it.second) ?: it.second)
@@ -164,16 +137,23 @@ class VueDefaultContainerInfoProvider : VueContainerInfoProvider.VueInitializedC
   }
 
   private class ComponentsAccessor : MapAccessor<VueComponent>() {
-    override fun build(declaration: JSObjectLiteralExpression): Map<String, VueComponent> {
+    override fun build(declaration: JSElement): Map<String, VueComponent> {
       return StreamEx.of(ContainerMember.Components.readMembers(declaration))
         .mapToEntry({ p -> p.first }, { p -> p.second })
         .mapValues { element ->
-          val meaningfulElement = VueComponents.meaningfulExpression(element) ?: element
-          if (meaningfulElement is HtmlFileImpl) {
-            VueModelManager.getComponent(meaningfulElement)
-          }
-          else {
-            getComponentDescriptor(meaningfulElement as? JSElement)
+          when (val meaningfulElement = VueComponents.meaningfulExpression(element) ?: element) {
+            is ES6ImportedBinding ->
+              meaningfulElement.declaration?.fromClause
+                ?.resolveReferencedElements()
+                ?.find { it is JSEmbeddedContent }
+                ?.context
+                ?.castSafelyTo<XmlTag>()
+                ?.takeIf { hasAttribute(it, SETUP_ATTRIBUTE_NAME) }
+                ?.containingFile
+                ?.let { VueModelManager.getComponent(it) }
+            is HtmlFileImpl ->
+              VueModelManager.getComponent(meaningfulElement)
+            else -> getComponentDescriptor(meaningfulElement as? JSElement)
               ?.let { VueModelManager.getComponent(it) }
           }
           ?: VueUnresolvedComponent()
@@ -184,7 +164,7 @@ class VueDefaultContainerInfoProvider : VueContainerInfoProvider.VueInitializedC
   }
 
   private class ModelAccessor : MemberAccessor<VueModelDirectiveProperties>() {
-    override fun build(declaration: JSObjectLiteralExpression): VueModelDirectiveProperties {
+    override fun build(declaration: JSElement): VueModelDirectiveProperties {
       var prop = VueModelDirectiveProperties.DEFAULT_PROP
       var event = VueModelDirectiveProperties.DEFAULT_EVENT
       ContainerMember.Model.readMembers(declaration).forEach { (name, element) ->
@@ -202,7 +182,7 @@ class VueDefaultContainerInfoProvider : VueContainerInfoProvider.VueInitializedC
   }
 
   private class DelimitersAccessor : MemberAccessor<Pair<String, String>?>() {
-    override fun build(declaration: JSObjectLiteralExpression): Pair<String, String>? {
+    override fun build(declaration: JSElement): Pair<String, String>? {
       val delimiters = ContainerMember.Delimiters.readMembers(declaration)
       if (delimiters.size == 2
           && delimiters[0].first.isNotBlank()

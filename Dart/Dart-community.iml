@@ -79,9 +79,11 @@
     <orderEntry type="module" module-name="intellij.java.testFramework" scope="TEST" />
     <orderEntry type="module" module-name="intellij.platform.externalSystem.impl" scope="TEST" />
     <orderEntry type="module" module-name="intellij.platform.coverage" />
+    <orderEntry type="library" exported="" name="Trove4j" level="project" />
     <orderEntry type="library" exported="" name="Guava" level="project" />
     <orderEntry type="library" exported="" name="gson" level="project" />
     <orderEntry type="library" name="snakeyaml" level="project" />
+    <orderEntry type="library" name="netty-buffer" level="project" />
     <orderEntry type="library" name="netty-codec-http" level="project" />
     <orderEntry type="library" exported="" name="markdownj" level="project" />
     <orderEntry type="module-library">

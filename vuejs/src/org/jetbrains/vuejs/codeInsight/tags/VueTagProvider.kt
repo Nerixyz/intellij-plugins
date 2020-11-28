@@ -1,4 +1,4 @@
-// Copyright 2000-2019 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2020 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package org.jetbrains.vuejs.codeInsight.tags
 
 import com.intellij.codeInsight.completion.PrioritizedLookupElement
@@ -15,19 +15,24 @@ import com.intellij.psi.impl.source.xml.XmlElementDescriptorProvider
 import com.intellij.psi.xml.XmlTag
 import com.intellij.xml.XmlElementDescriptor
 import com.intellij.xml.XmlTagNameProvider
-import icons.VuejsIcons
+import org.jetbrains.vuejs.VuejsIcons
 import org.jetbrains.vuejs.codeInsight.detectVueScriptLanguage
 import org.jetbrains.vuejs.codeInsight.fromAsset
 import org.jetbrains.vuejs.codeInsight.toAsset
 import org.jetbrains.vuejs.context.isVueContext
 import org.jetbrains.vuejs.lang.html.VueFileType
 import org.jetbrains.vuejs.model.*
+import java.util.*
 
 private const val LOCAL_PRIORITY = 100.0
 private const val APP_PRIORITY = 90.0
 private const val PLUGIN_PRIORITY = 90.0
 private const val GLOBAL_PRIORITY = 80.0
 private const val UNREGISTERED_PRIORITY = 50.0
+
+val CUSTOM_TOP_LEVEL_TAGS: Map<String, String> = mapOf(
+  Pair("i18n", "JSON")
+)
 
 class VueTagProvider : XmlElementDescriptorProvider, XmlTagNameProvider {
   override fun getDescriptor(tag: XmlTag?): XmlElementDescriptor? {
@@ -52,7 +57,7 @@ class VueTagProvider : XmlElementDescriptorProvider, XmlTagNameProvider {
 
     if (components.isNotEmpty())
       return VueElementDescriptor(tag, components)
-    return null
+    return CUSTOM_TOP_LEVEL_TAGS[tag.name.toLowerCase(Locale.US)]?.let { VueElementDescriptor(tag) }
   }
 
   override fun addTagNameVariants(elements: MutableList<LookupElement>?, tag: XmlTag, namespacePrefix: String?) {

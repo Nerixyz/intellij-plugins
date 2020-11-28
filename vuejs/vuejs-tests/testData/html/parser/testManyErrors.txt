@@ -24,7 +24,7 @@ HtmlFile:test.vue
             XmlToken:XML_START_TAG_START('<')
             XmlToken:XML_NAME('TITLE')
             XmlToken:XML_TAG_END('>')
-            XmlText
+            HtmlRawText
               XmlToken:XML_DATA_CHARACTERS('AppletViewer')
               PsiWhiteSpace(' ')
               XmlToken:XML_DATA_CHARACTERS('Tags')

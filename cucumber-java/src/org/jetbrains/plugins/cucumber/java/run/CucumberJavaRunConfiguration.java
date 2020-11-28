@@ -9,6 +9,7 @@ import com.intellij.execution.filters.Filter;
 import com.intellij.execution.process.ProcessHandler;
 import com.intellij.execution.runners.ExecutionEnvironment;
 import com.intellij.execution.runners.ProgramRunner;
+import com.intellij.execution.target.LanguageRuntimeType;
 import com.intellij.execution.testframework.JavaTestLocator;
 import com.intellij.execution.testframework.sm.SMTestRunnerConnectionUtil;
 import com.intellij.execution.testframework.sm.runner.SMTRunnerConsoleProperties;
@@ -24,6 +25,7 @@ import com.intellij.openapi.progress.ProgressIndicator;
 import com.intellij.openapi.progress.ProgressManager;
 import com.intellij.openapi.progress.Task;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.util.NlsSafe;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.util.ArrayUtilRt;
 import com.intellij.util.PathUtil;
@@ -62,7 +64,7 @@ public class CucumberJavaRunConfiguration extends ApplicationConfiguration {
 
   @Override
   public RunProfileState getState(@NotNull Executor executor, @NotNull ExecutionEnvironment env) {
-    return new JavaApplicationCommandLineState<CucumberJavaRunConfiguration>(this, env) {
+    return new JavaApplicationCommandLineState<>(this, env) {
       private final Collection<Filter> myConsoleFilters = new ArrayList<>();
 
       @Override
@@ -71,7 +73,7 @@ public class CucumberJavaRunConfiguration extends ApplicationConfiguration {
         final JavaRunConfigurationModule module = getConfigurationModule();
 
         final int classPathType = JavaParameters.JDK_AND_CLASSES_AND_TESTS;
-        final String jreHome = isAlternativeJrePathEnabled() ? getAlternativeJrePath() : null;
+        final String jreHome = getTargetEnvironmentRequest() == null && isAlternativeJrePathEnabled() ? getAlternativeJrePath() : null;
         JavaParametersUtil.configureModule(module, params, classPathType, jreHome);
         JavaParametersUtil.configureConfiguration(params, CucumberJavaRunConfiguration.this);
 
@@ -81,9 +83,8 @@ public class CucumberJavaRunConfiguration extends ApplicationConfiguration {
         }
 
         params.setMainClass(getMainClassName());
-        for (RunConfigurationExtension ext : RunConfigurationExtension.EP_NAME.getExtensionList()) {
-          ext.updateJavaParameters(CucumberJavaRunConfiguration.this, params, getRunnerSettings(), executor);
-        }
+        JavaRunConfigurationExtensionManager.getInstance()
+          .updateJavaParameters(CucumberJavaRunConfiguration.this, params, getRunnerSettings(), executor);
 
         final String glueValue = getGlue();
         if (glueValue != null && !StringUtil.isEmpty(glueValue)) {
@@ -111,7 +112,7 @@ public class CucumberJavaRunConfiguration extends ApplicationConfiguration {
 
       @NotNull
       private ConsoleView createConsole(@NotNull final Executor executor, ProcessHandler processHandler) throws ExecutionException {
-        @NonNls  String testFrameworkName = "cucumber";
+        @NonNls String testFrameworkName = "cucumber";
         final CucumberJavaRunConfiguration runConfiguration = CucumberJavaRunConfiguration.this;
         final SMTRunnerConsoleProperties consoleProperties = new SMTRunnerConsoleProperties(runConfiguration, testFrameworkName, executor) {
           @NotNull
@@ -250,7 +251,7 @@ public class CucumberJavaRunConfiguration extends ApplicationConfiguration {
     myCucumberGlueProvider = cucumberGlueProvider;
   }
 
-  public String getFilePath() {
+  public @NlsSafe String getFilePath() {
     return getOptions().getFilePath();
   }
 
@@ -287,5 +288,17 @@ public class CucumberJavaRunConfiguration extends ApplicationConfiguration {
   @Override
   public String getActionName() {
     return getName();
+  }
+
+  @Nullable
+  @Override
+  public LanguageRuntimeType<?> getDefaultLanguageRuntimeType() {
+    return null;
+  }
+
+  @Nullable
+  @Override
+  public String getDefaultTargetName() {
+    return null;
   }
 }

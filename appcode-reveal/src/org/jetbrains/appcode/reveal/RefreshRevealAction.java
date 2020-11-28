@@ -14,11 +14,11 @@ import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.Messages;
 import com.jetbrains.cidr.execution.AppCodeRunConfiguration;
 import com.jetbrains.cidr.execution.BuildDestination;
+import com.jetbrains.cidr.execution.MacOSBuildDestination;
 import com.jetbrains.cidr.execution.SimulatedBuildDestination;
-import com.jetbrains.cidr.xcode.Xcode;
-import com.jetbrains.cidr.xcode.frameworks.AppleSdk;
-import com.jetbrains.cidr.xcode.model.XCBuildConfiguration;
+import com.jetbrains.cidr.xcode.XcodeBase;
 import com.jetbrains.cidr.xcode.model.XCBuildSettings;
+import com.jetbrains.cidr.xcode.model.XcodeMetaData;
 import icons.AppcodeRevealIcons;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -54,17 +54,14 @@ public class RefreshRevealAction extends AnAction implements AnAction.Transparen
 
     e.getPresentation().setIcon(ICON);
 
-    String title = "Show in Reveal";
-
-    XCBuildConfiguration xcBuildConfiguration = myConfiguration.getConfiguration();
-    AppleSdk sdk = xcBuildConfiguration == null ? null : XCBuildSettings.getRawBuildSettings(xcBuildConfiguration).getBaseSdk();
+    XCBuildSettings buildSettings = XcodeMetaData.getBuildSettings(myConfiguration.getResolveConfiguration(myDestination));
 
     File lib = null;
     boolean compatible = false;
 
     File appBundle = Reveal.getDefaultRevealApplicationBundle();
     if (appBundle != null) {
-      lib = Reveal.getRevealLib(appBundle, sdk);
+      lib = Reveal.getRevealLib(appBundle, buildSettings);
       compatible = Reveal.isCompatible(appBundle);
 
       e.getPresentation().setEnabled(lib != null
@@ -78,14 +75,21 @@ public class RefreshRevealAction extends AnAction implements AnAction.Transparen
       );
     }
 
+    String title;
     if (lib == null) {
-      title += " (Reveal library not found)";
+      //noinspection DialogTitleCapitalization
+      title = RevealBundle.message("action.show.in.reveal.reveal.library.not.found.text");
     }
     else if (!compatible) {
-      title += " (Reveal.app is not compatible, please update)";
+      //noinspection DialogTitleCapitalization
+      title = RevealBundle.message("action.show.in.reveal.reveal.app.not.compatible.please.update.text");
     }
     else if (myDisabled) {
-      title += " (Action is disabled until configuration relaunch)";
+      //noinspection DialogTitleCapitalization
+      title = RevealBundle.message("action.show.in.reveal.action.disabled.until.configuration.relaunch.text");
+    }
+    else {
+      title = RevealBundle.message("action.show.in.reveal.text");
     }
 
     e.getPresentation().setText(title, false);
@@ -99,10 +103,8 @@ public class RefreshRevealAction extends AnAction implements AnAction.Transparen
     RevealRunConfigurationExtension.RevealSettings settings = RevealRunConfigurationExtension.getRevealSettings(myConfiguration);
     if (!settings.autoInject) {
       int response = Messages.showYesNoDialog(project,
-                                              "Reveal library was not injected.<br><br>" +
-                                              "Would you like to enable automatic library injection for this run configuration?<br><br>" +
-                                              "You'll need to relaunch the configuration after this change.",
-                                              "Reveal", Messages.getQuestionIcon()
+                                              RevealBundle.message("dialog.message.reveal.library.was.not.injected"),
+                                              RevealBundle.message("dialog.title.reveal"), Messages.getQuestionIcon()
       );
       if (response != Messages.YES) return;
 
@@ -127,17 +129,17 @@ public class RefreshRevealAction extends AnAction implements AnAction.Transparen
 
   @Nullable
   private static String getDeviceName(@NotNull BuildDestination destination) throws ExecutionException {
-    if (Xcode.getVersion().is(8)) {
+    if (XcodeBase.getVersion().is(8) || destination instanceof MacOSBuildDestination) {
       // Xcode 8's simulators use the host computer's name
       return ExecUtil.execAndReadLine(new GeneralCommandLine("scutil", "--get", "ComputerName"));
     } else if (destination.isDevice()) {
       return destination.getDeviceSafe().getName();
     } else if (destination.isSimulator()) {
       SimulatedBuildDestination.Simulator simulator = destination.getSimulator();
-      if (simulator == null) throw new ExecutionException("Simulator not specified.");
+      if (simulator == null) throw new ExecutionException(RevealBundle.message("dialog.message.simulator.not.specified"));
 
       return simulator.getName();
     }
-    throw new ExecutionException("Unsupported destination: " + destination);
+    throw new ExecutionException(RevealBundle.message("dialog.message.unsupported.destination", destination));
   }
 }

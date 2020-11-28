@@ -44,7 +44,7 @@ import org.osmorc.frameworkintegration.FrameworkInstanceDefinition;
 import org.osmorc.frameworkintegration.FrameworkIntegrator;
 import org.osmorc.frameworkintegration.FrameworkIntegratorRegistry;
 import org.osmorc.i18n.OsmorcBundle;
-import org.osmorc.util.OsgiUiUtil;
+import org.osmorc.util.FrameworkInstanceRenderer;
 
 import javax.swing.*;
 import javax.swing.event.ListSelectionEvent;
@@ -77,11 +77,11 @@ public class FrameworkDefinitionsEditorComponent {
     myBus = ApplicationManager.getApplication().getMessageBus();
     myModified = new ArrayList<>();
 
-    myContentPanel.setBorder(IdeBorderFactory.createTitledBorder("Framework instances:", false, JBUI.insetsTop(8)).setShowLine(false));
+    myContentPanel.setBorder(IdeBorderFactory.createTitledBorder(OsmorcBundle.message("frameworks.title"), false, JBUI.insetsTop(8)).setShowLine(false));
 
     myFrameworkInstances = new JBList<>(myModel);
     myFrameworkInstances.getEmptyText().setText(OsmorcBundle.message("frameworks.empty"));
-    myFrameworkInstances.setCellRenderer(new OsgiUiUtil.FrameworkInstanceRenderer());
+    myFrameworkInstances.setCellRenderer(new FrameworkInstanceRenderer());
 
     List<AddAction> addActions = FrameworkIntegratorRegistry.getInstance().getFrameworkIntegrators().stream()
       .map(AddAction::new)
@@ -194,7 +194,7 @@ public class FrameworkDefinitionsEditorComponent {
   private final class AddAction extends AnAction implements DumbAware, Comparable<AddAction> {
     private final FrameworkIntegrator myIntegrator;
 
-    private AddAction(FrameworkIntegrator integrator) {
+    AddAction(FrameworkIntegrator integrator) {
       super(integrator.getDisplayName());
       myIntegrator = integrator;
     }

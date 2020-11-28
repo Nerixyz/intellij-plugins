@@ -1,15 +1,15 @@
-// Copyright 2000-2018 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2020 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package org.angularjs;
 
 import com.intellij.codeInsight.completion.PrioritizedLookupElement;
 import com.intellij.lang.javascript.psi.JSElement;
 import com.intellij.lang.javascript.psi.ecma6.ES6Decorator;
-import com.intellij.openapi.application.PathManager;
 import com.intellij.openapi.util.registry.Registry;
 import com.intellij.psi.*;
 import com.intellij.psi.util.PsiTreeUtil;
 import com.intellij.testFramework.UsefulTestCase;
 import com.intellij.testFramework.fixtures.CodeInsightTestFixture;
+import com.intellij.testFramework.fixtures.IdeaTestExecutionPolicy;
 import com.intellij.testFramework.fixtures.TestLookupElementPresentation;
 import com.intellij.util.ObjectUtils;
 import com.intellij.util.containers.ContainerUtil;
@@ -28,7 +28,7 @@ import static org.junit.Assert.assertTrue;
 /**
  * @author Dennis.Ushakov
  */
-public class AngularTestUtil {
+public final class AngularTestUtil {
 
   public static void enableAstLoadingFilter(@NotNull UsefulTestCase testCase) {
     Registry.get("ast.loading.filter").setValue(true, testCase.getTestRootDisposable());
@@ -39,8 +39,13 @@ public class AngularTestUtil {
     return contribPath + "/AngularJS/test/" + clazz.getPackage().getName().replace('.', '/') + "/data/";
   }
 
+  public static String getBaseTestExDataPath(Class<?> clazz) {
+    String contribPath = getContribPath();
+    return contribPath + "/AngularJS/test-ex/" + clazz.getPackage().getName().replace('.', '/') + "/data/";
+  }
+
   private static String getContribPath() {
-    final String homePath = PathManager.getHomePath();
+    final String homePath = IdeaTestExecutionPolicy.getHomePathWithPolicy();
     if (new File(homePath, "contrib/.gitignore").isFile()) {
       return homePath + File.separatorChar + "contrib";
     }

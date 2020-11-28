@@ -9,6 +9,8 @@
   ]]>
   </description>
   <depends>com.intellij.modules.xml</depends>
+  <depends>org.intellij.intelliLang</depends>
+  <resource-bundle>messages.CucumberBundle</resource-bundle>
   <vendor>JetBrains</vendor>
 
   <extensions defaultExtensionNs="com.intellij">
@@ -46,8 +48,8 @@
                      key="inspection.missed.example.name" groupKey="cucumber.inspection.group.name" enabledByDefault="true" level="ERROR"
                      implementationClass="org.jetbrains.plugins.cucumber.inspections.CucumberMissedExamplesInspection"/>
 
-    <localInspection language="Gherkin" shortName="CucumberTableInspection" displayName="Unused or missing columns in Cucumber tables"
-                     groupBundle="messages.CucumberBundle" groupKey="cucumber.inspection.group.name" enabledByDefault="true"
+    <localInspection language="Gherkin" shortName="CucumberTableInspection" bundle="messages.CucumberBundle"
+                     key="inspection.table.name" groupKey="cucumber.inspection.group.name" enabledByDefault="true"
                      level="WARNING" implementationClass="org.jetbrains.plugins.cucumber.inspections.CucumberTableInspection"/>
 
     <localInspection  language="Gherkin" shortName="GherkinBrokenTableInspection" bundle="messages.CucumberBundle"
@@ -90,7 +92,7 @@
 
     <intentionAction>
       <className>org.jetbrains.plugins.cucumber.intentions.ScenarioToOutlineIntention</className>
-      <category>Cucumber</category>
+      <categoryKey>intention.family.name.cucumber</categoryKey>
     </intentionAction>
     <multiHostInjector implementation="org.jetbrains.plugins.cucumber.injector.GherkinLanguageInjector"/>
   </extensions>

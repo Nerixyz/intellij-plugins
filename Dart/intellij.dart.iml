@@ -61,5 +61,9 @@
       </library>
     </orderEntry>
     <orderEntry type="library" name="Trove4j" level="project" />
+    <orderEntry type="library" name="netty-buffer" level="project" />
+    <orderEntry type="library" name="caffeine" level="project" />
+    <orderEntry type="module" module-name="intellij.platform.core.ui" />
+    <orderEntry type="module" module-name="intellij.platform.codeStyle.impl" />
   </component>
 </module>

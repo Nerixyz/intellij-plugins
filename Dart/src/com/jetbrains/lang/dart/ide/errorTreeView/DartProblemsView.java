@@ -12,7 +12,10 @@ import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ModalityState;
 import com.intellij.openapi.components.*;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.util.NlsContexts;
 import com.intellij.openapi.util.NlsContexts.TabTitle;
+import com.intellij.openapi.util.text.HtmlBuilder;
+import com.intellij.openapi.util.text.HtmlChunk;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.openapi.wm.ToolWindow;
@@ -126,11 +129,11 @@ public final class DartProblemsView implements PersistentStateComponent<DartProb
     return content != null ? (DartProblemsViewPanel)content.getComponent() : null;
   }
 
-  void setHeaderText(@TabTitle @NotNull String headerText) {
+  void setTabTitle(@TabTitle @NotNull String tabTitle) {
     ToolWindow toolWindow = getDartAnalysisToolWindow();
     Content content = toolWindow != null ? toolWindow.getContentManager().getContent(0) : null;
     if (content != null) {
-      content.setDisplayName(headerText);
+      content.setDisplayName(tabTitle);
     }
   }
 
@@ -167,15 +170,19 @@ public final class DartProblemsView implements PersistentStateComponent<DartProb
   }
 
   @SuppressWarnings("unused")
-  public void showWarningNotification(@NotNull String title, @Nullable String content, @Nullable Icon icon) {
+  public void showWarningNotification(@NotNull @NlsContexts.NotificationTitle String title,
+                                      @Nullable @NlsContexts.NotificationContent String content,
+                                      @Nullable Icon icon) {
     showNotification(NotificationType.WARNING, title, content, icon, false);
   }
 
-  public void showErrorNotificationTerse(@NotNull String title) {
+  public void showErrorNotificationTerse(@NotNull @NlsContexts.NotificationTitle String title) {
     showNotification(NotificationType.ERROR, title, null, null, true);
   }
 
-  public void showErrorNotification(@NotNull String title, @Nullable String content, @Nullable Icon icon) {
+  public void showErrorNotification(@NotNull @NlsContexts.NotificationTitle String title,
+                                    @Nullable @NlsContexts.NotificationContent String content,
+                                    @Nullable Icon icon) {
     showNotification(NotificationType.ERROR, title, content, icon, false);
   }
 
@@ -189,8 +196,8 @@ public final class DartProblemsView implements PersistentStateComponent<DartProb
   public static final String OPEN_DART_ANALYSIS_LINK = "open.dart.analysis";
 
   private void showNotification(@NotNull NotificationType notificationType,
-                                @NotNull String title,
-                                @Nullable String content,
+                                @NotNull @NlsContexts.NotificationTitle String title,
+                                @Nullable @NlsContexts.NotificationContent String content,
                                 @Nullable Icon icon,
                                 boolean terse) {
     clearNotifications();
@@ -200,8 +207,11 @@ public final class DartProblemsView implements PersistentStateComponent<DartProb
     content = StringUtil.notNullize(content);
     if (!terse) {
       if (!content.endsWith("<br>")) content += "<br>";
-      content += "<br><a href='disable.for.session'>Don't show for this session</a>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;" +
-                 "<a href='never.show.again'>Never show again</a>";
+      content +=
+        new HtmlBuilder().br()
+          .appendLink("disable.for.session", DartBundle.message("notification.link.don.t.show.for.this.session"))
+          .append(HtmlChunk.nbsp(7))
+          .appendLink("never.show.again", DartBundle.message("notification.link.never.show.again"));
     }
 
     myNotification = NOTIFICATION_GROUP.createNotification(title, content, notificationType, new NotificationListener.Adapter() {

@@ -1,33 +1,33 @@
-<idea-plugin url="https://github.com/JetBrains/intellij-plugins/tree/master/vuejs">
+<idea-plugin url="https://github.com/JetBrains/intellij-plugins/tree/master/vuejs" package="org.jetbrains.vuejs">
   <!--suppress PluginXmlCapitalization -->
   <name>Vue.js</name>
   <id>org.jetbrains.plugins.vue</id>
   <description><![CDATA[
-Support for <a href="https://vuejs.org">Vue.js</a> projects.
+    Support for <a href="https://vuejs.org">Vue.js</a> projects.
 
-<h3>Getting started</h3>
+    <h3>Getting started</h3>
 
-<ul>
-    <li>Open your Vue.js project.</li>
-    <li>Make sure you have Vue.js listed in your project dependencies in package.json and it is installed.</li>
-    <li>Now, you will get Vue-specific code completion, navigation, and many other features in .vue files.</li>
-</ul>
+    <ul>
+      <li>Open your Vue.js project.</li>
+      <li>Make sure you have Vue.js listed in your project dependencies in package.json and it is installed.</li>
+      <li>Now, you will get Vue-specific code completion, navigation, and many other features in .vue files.</li>
+    </ul>
 
-<h3>Features</h3>
+    <h3>Features</h3>
 
-<ul>
-    <li>Completion for components, directives, props and methods in templates</li>
-    <li>Navigation from the component, directives and event handlers to their definition</li>
-    <li>Coding assistance for different languages inside template, script and style tags in .vue files</li>
-    <li>Extract component and rename component refactorings</li>
-    <li>Collection of code snippets for Vue.js</li>
-    <li>Create new projects from the IDE Welcome screen using Vue CLI</li>
-</ul>
+    <ul>
+      <li>Completion for components, directives, props and methods in templates</li>
+      <li>Navigation from the component, directives and event handlers to their definition</li>
+      <li>Coding assistance for different languages inside template, script and style tags in .vue files</li>
+      <li>Extract component and rename component refactorings</li>
+      <li>Collection of code snippets for Vue.js</li>
+      <li>Create new projects from the IDE Welcome screen using Vue CLI</li>
+    </ul>
 
 
-Learn more about Vue.js support in the <a href="https://www.jetbrains.com/help/webstorm/vue-js.html">IDE
-    documentation</a>.
-  ]]></description>
+    Learn more about Vue.js support in the <a href="https://www.jetbrains.com/help/webstorm/vue-js.html">IDE
+      documentation</a>.
+    ]]></description>
   <vendor>JetBrains</vendor>
   <category>JavaScript Frameworks and Tools</category>
 
@@ -70,14 +70,20 @@ Learn more about Vue.js support in the <a href="https://www.jetbrains.com/help/w
                               implementation="org.jetbrains.vuejs.libraries.vuex.codeInsight.refs.VuexReferenceContributor"/>
     <psi.fileReferenceHelper implementation="org.jetbrains.vuejs.libraries.nuxt.codeInsight.NuxtFileReferenceHelper"/>
     <pathReferenceProvider implementation="org.jetbrains.vuejs.libraries.vueLoader.VueLoaderPathReferenceProvider"/>
+    <!--suppress PluginXmlValidity -->
+    <quoteHandler className="com.intellij.codeInsight.editorActions.HtmlQuoteHandler" fileType="Vue.js"/>
 
     <lang.syntaxHighlighterFactory language="Vue"
                                    implementationClass="org.jetbrains.vuejs.lang.html.highlighting.VueSyntaxHighlighterFactory"/>
     <xml.attributeDescriptorsProvider implementation="org.jetbrains.vuejs.codeInsight.attributes.VueAttributesProvider"/>
-    <xml.xmlExtension implementation="org.jetbrains.vuejs.codeInsight.VueXmlExtension" order="before html"/>
+    <xml.xmlExtension implementation="org.jetbrains.vuejs.codeInsight.VueXmlExtension" order="before react"/>
     <xml.tagNameProvider implementation="org.jetbrains.vuejs.codeInsight.tags.VueTagProvider"/>
     <xml.elementDescriptorProvider implementation="org.jetbrains.vuejs.codeInsight.tags.VueTagProvider"/>
+    <html.embeddedContentSupport implementation="org.jetbrains.vuejs.lang.html.lexer.VueEmbeddedContentSupport"/>
+    <html.embeddedContentSupport implementation="org.jetbrains.vuejs.libraries.i18n.VueI18nEmbeddedContentSupport"/>
     <gotoDeclarationHandler implementation="org.jetbrains.vuejs.editor.VueGotoDeclarationHandler"/>
+    <notificationGroup displayType="BALLOON" id="Vue" icon="org.jetbrains.vuejs.VuejsIcons.Vue" isLogByDefault="true"
+                       bundle="messages.VueBundle" key="vue.documentation.vue"/>
 
     <stubIndex implementation="org.jetbrains.vuejs.index.VueComponentsIndex"/>
     <stubIndex implementation="org.jetbrains.vuejs.index.VueOptionsIndex"/>
@@ -88,7 +94,7 @@ Learn more about Vue.js support in the <a href="https://www.jetbrains.com/help/w
     <stubIndex implementation="org.jetbrains.vuejs.index.VueIdIndex"/>
     <stubIndex implementation="org.jetbrains.vuejs.index.VueGlobalFiltersIndex"/>
     <stubIndex implementation="org.jetbrains.vuejs.libraries.vuex.index.VuexStoreIndex"/>
-    <fileBasedIndex implementation="org.jetbrains.vuejs.index.VueNoScriptFilesIndex"/>
+    <fileBasedIndex implementation="org.jetbrains.vuejs.index.VueEmptyComponentInitializersIndex"/>
 
     <stubElementTypeHolder class="org.jetbrains.vuejs.lang.expr.parser.VueJSStubElementTypes"/>
     <stubElementTypeHolder class="org.jetbrains.vuejs.lang.html.parser.VueStubElementTypes"/>
@@ -97,18 +103,21 @@ Learn more about Vue.js support in the <a href="https://www.jetbrains.com/help/w
     <fileIndentOptionsProvider implementation="org.jetbrains.vuejs.lang.html.psi.formatter.VueFileIndentOptionsProvider"
                                id="vue" order="before html"/>
 
+
+    <postStartupActivity implementation="org.jetbrains.vuejs.lang.html.psi.arrangement.VueArrangementSettingsMigration"/>
+
     <directoryIndexExcludePolicy implementation="org.jetbrains.vuejs.libraries.nuxt.index.NuxtIndexExcludePolicy"/>
 
     <directoryProjectGenerator
       implementation="org.jetbrains.vuejs.cli.VueCliProjectGenerator"/>  <!-- works in WebStorm and other SmallIDEs -->
     <projectTemplatesFactory implementation="org.jetbrains.vuejs.cli.VueProjectTemplateFactory"/> <!-- works in IntelliJ IDEA -->
 
-    <localInspection language="Vue" groupName="Vue" shortName="VueDataFunction"
+    <localInspection language="Vue" groupKey="vue.inspection.group.name" shortName="VueDataFunction"
                      enabledByDefault="true" level="WARNING"
                      implementationClass="org.jetbrains.vuejs.inspections.DataFunctionInspection"
                      key="vue.inspection.display.name.data.function"
                      bundle="messages.VueBundle"/>
-    <localInspection language="Vue" groupName="Vue" shortName="VueDuplicateTag"
+    <localInspection language="Vue" groupKey="vue.inspection.group.name" shortName="VueDuplicateTag"
                      enabledByDefault="true" level="WARNING"
                      implementationClass="org.jetbrains.vuejs.inspections.DuplicateTagInspection"
                      key="vue.inspection.display.name.duplicate.tag" bundle="messages.VueBundle"/>
@@ -151,6 +160,8 @@ Learn more about Vue.js support in the <a href="https://www.jetbrains.com/help/w
       implementation="org.jetbrains.vuejs.lang.typescript.service.VueTypeScriptServiceHighlightingPassFactoryRegistrar"/>
     <lang.formatter language="Vue" implementationClass="org.jetbrains.vuejs.lang.html.psi.formatter.VueFormattingModelBuilder"/>
     <lang.formatter language="VueJS" implementationClass="org.jetbrains.vuejs.lang.expr.psi.formatter.VueJSFormattingModelBuilder"/>
+    <lang.rearranger language="Vue" implementationClass="org.jetbrains.vuejs.lang.html.psi.arrangement.VueRearranger"/>
+    <multiLangCommenter implementation="org.jetbrains.vuejs.editor.VueCommenterProvider"/>
 
     <lang.syntaxHighlighterFactory language="VueJS"
                                    implementationClass="org.jetbrains.vuejs.lang.expr.highlighting.VueJSHighlighterFactory"/>
@@ -160,6 +171,8 @@ Learn more about Vue.js support in the <a href="https://www.jetbrains.com/help/w
     <codeInsight.parameterInfo language="VueJS" implementationClass="com.intellij.javascript.JSParameterInfoHandler"/>
     <codeInsight.parameterNameHints language="Vue"
                                     implementationClass="org.jetbrains.vuejs.editor.VueJSInlayParameterHintsProvider"/>
+
+    <eslint.ruleMappersFactory implementation="org.jetbrains.vuejs.libraries.eslint.VueEslintRuleMappersFactory"/>
 
     <vuejs.templateScopesProvider
       implementation="org.jetbrains.vuejs.codeInsight.template.VueStandardSymbolsScopesProvider"
@@ -180,6 +193,8 @@ Learn more about Vue.js support in the <a href="https://www.jetbrains.com/help/w
     <vuejs.contextProvider implementation="org.jetbrains.vuejs.context.VueNodeModulesContextProvider"
                            id="node_modules"
                            order="after package.json"/>
+    <vuejs.contextProvider implementation="org.jetbrains.vuejs.context.VueLibraryContextProvider"
+                           id="js_libs"/>
 
     <vuejs.containerInfoProvider implementation="org.jetbrains.vuejs.model.source.VueDefaultContainerInfoProvider"
                                  id="default"/>
@@ -223,7 +238,7 @@ Learn more about Vue.js support in the <a href="https://www.jetbrains.com/help/w
     <elementScopeProvider implementation="org.jetbrains.vuejs.VueElementResolveScopeProvider"/>
     <indexedFileTypeProvider implementation="org.jetbrains.vuejs.lang.html.VueIndexedFileTypeProvider"/>
 
-    <frameworkIndexingHandler implementation="org.jetbrains.vuejs.index.VueFrameworkHandler" version="8"/>
+    <frameworkIndexingHandler implementation="org.jetbrains.vuejs.index.VueFrameworkHandler" version="10"/>
     <frameworkIndexingHandler implementation="org.jetbrains.vuejs.libraries.vuex.index.VuexFrameworkHandler" version="6"/>
     <frameworkIndexingHandler implementation="org.jetbrains.vuejs.libraries.templateLoader.TemplateLoaderFrameworkHandler" version="1"/>
 

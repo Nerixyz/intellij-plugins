@@ -11,6 +11,9 @@ import javax.swing.*;
 public class SwfFileType implements FileType {
   public static final FileType SWF_FILE_TYPE = new SwfFileType();
 
+  private SwfFileType() {
+  }
+
   @Override
   @NotNull
   public String getName() {
@@ -42,10 +45,5 @@ public class SwfFileType implements FileType {
   @Override
   public boolean isReadOnly() {
     return true;
-  }
-
-  @Override
-  public String getCharset(@NotNull final VirtualFile file, final byte @NotNull [] content) {
-    return null;
   }
 }

@@ -3,6 +3,7 @@ package org.jetbrains.plugins.cucumber.psi;
 import com.intellij.openapi.fileTypes.LanguageFileType;
 import icons.CucumberIcons;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.plugins.cucumber.CucumberBundle;
 
 import javax.swing.*;
 
@@ -12,7 +13,7 @@ import javax.swing.*;
 public class GherkinFileType extends LanguageFileType {
   public static final GherkinFileType INSTANCE = new GherkinFileType();
 
-  protected GherkinFileType() {
+  private GherkinFileType() {
     super(GherkinLanguage.INSTANCE);
   }
 
@@ -25,7 +26,7 @@ public class GherkinFileType extends LanguageFileType {
   @Override
   @NotNull
   public String getDescription() {
-    return "Cucumber scenario";
+    return CucumberBundle.message("label.cucumber.scenario");
   }
 
   @Override

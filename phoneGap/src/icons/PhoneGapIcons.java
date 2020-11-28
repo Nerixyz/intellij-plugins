@@ -11,9 +11,8 @@ import javax.swing.*;
  * DO NOT EDIT IT BY HAND, run "Generate icon classes" configuration instead
  */
 public final class PhoneGapIcons {
-  private static @NotNull Icon load(@NotNull String path) {
-    return IconManager.getInstance().getIcon(path, PhoneGapIcons.class);
+  private static @NotNull Icon load(@NotNull String path, long cacheKey, int flags) {
+    return IconManager.getInstance().loadRasterizedIcon(path, PhoneGapIcons.class.getClassLoader(), cacheKey, flags);
   }
-
-  /** 16x16 */ public static final @NotNull Icon PhonegapIntegration = load("/com/github/masahirosuzuka/PhoneGapIntelliJPlugin/icons/PhonegapIntegration.svg");
+  /** 16x16 */ public static final @NotNull Icon PhonegapIntegration = load("com/github/masahirosuzuka/PhoneGapIntelliJPlugin/icons/PhonegapIntegration.svg", 306623214660941190L, 0);
 }

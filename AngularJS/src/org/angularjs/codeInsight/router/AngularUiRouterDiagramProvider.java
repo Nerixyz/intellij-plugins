@@ -32,9 +32,11 @@ import com.intellij.uml.UmlGraphBuilder;
 import com.intellij.uml.core.renderers.DefaultUmlRenderer;
 import com.intellij.uml.presentation.DiagramPresentationModelImpl;
 import com.intellij.util.ArrayUtil;
+import com.intellij.util.containers.ContainerUtil;
 import com.intellij.util.ui.JBUI;
 import org.angularjs.AngularJSBundle;
 import org.intellij.lang.annotations.Pattern;
+import org.jetbrains.annotations.Nls;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -46,12 +48,8 @@ import java.awt.event.ComponentAdapter;
 import java.awt.event.ComponentEvent;
 import java.util.List;
 import java.util.*;
-import java.util.stream.Collectors;
 
-/**
- * @author Irina.Chernushina on 3/23/2016.
- */
-public class AngularUiRouterDiagramProvider extends BaseDiagramProvider<DiagramObject> {
+public final class AngularUiRouterDiagramProvider extends BaseDiagramProvider<DiagramObject> {
   public static final String ANGULAR_UI_ROUTER = "Angular-ui-router";
   public static final JBColor VIEW_COLOR = new JBColor(new Color(0xE1FFFC), new Color(0x589df6));
   public static final BasicStroke DOTTED_STROKE =
@@ -64,7 +62,7 @@ public class AngularUiRouterDiagramProvider extends BaseDiagramProvider<DiagramO
   private final DiagramColorManagerBase myColorManager;
 
   public AngularUiRouterDiagramProvider() {
-    myResolver = new DiagramVfsResolver<DiagramObject>() {
+    myResolver = new DiagramVfsResolver<>() {
       @Override
       public String getQualifiedName(DiagramObject element) {
         if ((Type.template.equals(element.getType()) || Type.topLevelTemplate.equals(element.getType())) &&
@@ -90,7 +88,7 @@ public class AngularUiRouterDiagramProvider extends BaseDiagramProvider<DiagramO
         }
       }
     };
-    myElementManager = new AbstractDiagramElementManager<DiagramObject>() {
+    myElementManager = new AbstractDiagramElementManager<>() {
       @Override
       public Object[] getNodeItems(DiagramObject parent) {
         return ArrayUtil.toObjectArray(parent.getChildrenList());
@@ -126,7 +124,7 @@ public class AngularUiRouterDiagramProvider extends BaseDiagramProvider<DiagramO
         final List<String> warnings = element.getWarnings();
         final List<String> notes = element.getNotes();
         if (errors.isEmpty() && warnings.isEmpty() && notes.isEmpty()) return element.getTooltip();
-        final StringBuilder sb = new StringBuilder(element.getTooltip());
+        @Nls final StringBuilder sb = new StringBuilder(element.getTooltip());
         if (!notes.isEmpty()) {
           for (String note : notes) {
             sb.append('\n').append(note);
@@ -134,13 +132,13 @@ public class AngularUiRouterDiagramProvider extends BaseDiagramProvider<DiagramO
         }
         sb.append("<font style=\"color:#ff0000;\">");
         if (!errors.isEmpty()) {
-          sb.append('\n').append(StringUtil.pluralize("Error", errors.size())).append(":\n");
+          sb.append('\n').append(AngularJSBundle.icuMessage("angularjs.ui.router.diagram.node.tooltip.errors", errors.size())).append(":\n");
           for (String error : errors) {
             sb.append(error).append('\n');
           }
         }
         if (!warnings.isEmpty()) {
-          sb.append('\n').append(StringUtil.pluralize("Warning", warnings.size())).append(":\n");
+          sb.append('\n').append(AngularJSBundle.icuMessage("angularjs.ui.router.diagram.node.tooltip.warnings", errors.size())).append(":\n");
           for (String warning : warnings) {
             sb.append(warning).append('\n');
           }
@@ -231,7 +229,7 @@ public class AngularUiRouterDiagramProvider extends BaseDiagramProvider<DiagramO
   }
 
   @Override
-  public @Nullable DiagramPresentationModel createPresentationModel(Project project, Graph2D graph) {
+  public @NotNull DiagramPresentationModel createPresentationModel(Project project, Graph2D graph) {
     return new DiagramPresentationModelImpl(graph, project, this) {
       @Override
       public boolean allowChangeVisibleCategories() {
@@ -334,7 +332,7 @@ public class AngularUiRouterDiagramProvider extends BaseDiagramProvider<DiagramO
         try {
           inUpdate = true;
           myEdgeRealizers.clear();
-          final List<DiagramNode> nodes = GraphUtil.getSelectedNodes(getGraphBuilder());
+          final List<DiagramNode<?>> nodes = GraphUtil.getSelectedNodes(getGraphBuilder());
           super.update();
           myEdgesPositions.clear();
           final DiagramBuilder builder = getBuilder();
@@ -342,8 +340,8 @@ public class AngularUiRouterDiagramProvider extends BaseDiagramProvider<DiagramO
           builder.getView().fitContent();
           builder.updateView();
           if (!nodes.isEmpty()) {
-            final Collection<DiagramNode> objects = builder.getNodeObjects();
-            for (DiagramNode object : objects) {
+            final Collection<DiagramNode<?>> objects = builder.getNodeObjects();
+            for (DiagramNode<?> object : objects) {
               if (isInSelectedNodes(nodes, object)) {
                 builder.getGraph().setSelected(builder.getNode(object), true);
               }
@@ -387,7 +385,7 @@ public class AngularUiRouterDiagramProvider extends BaseDiagramProvider<DiagramO
       private void updateBySelection(DiagramNode node) {
         myVisibleEdges.clear();
         UmlGraphBuilder builder = (UmlGraphBuilder)graph.getDataProvider(DiagramDataKeys.GRAPH_BUILDER).get(null);
-        final List<DiagramNode> nodes = new ArrayList<>(GraphUtil.getSelectedNodes(builder));
+        final List<DiagramNode<?>> nodes = new ArrayList<>(GraphUtil.getSelectedNodes(builder));
         if (node != null && !nodes.contains(node)) nodes.add(node);
         DiagramNode selected = null;
         for (DiagramEdge edge : builder.getEdgeObjects()) {
@@ -403,7 +401,7 @@ public class AngularUiRouterDiagramProvider extends BaseDiagramProvider<DiagramO
           break;
         }
         if (selected == null) {
-          for (DiagramEdge edge : builder.getEdgeObjects()) {
+          for (DiagramEdge<?> edge : builder.getEdgeObjects()) {
             if (isInSelectedNodes(nodes, edge.getSource())) {
               selected = edge.getSource();
             }
@@ -445,8 +443,8 @@ public class AngularUiRouterDiagramProvider extends BaseDiagramProvider<DiagramO
     };
   }
 
-  private static boolean isInSelectedNodes(List<DiagramNode> nodes, DiagramNode node) {
-    for (DiagramNode diagramNode : nodes) {
+  private static boolean isInSelectedNodes(List<DiagramNode<?>> nodes, DiagramNode<?> node) {
+    for (DiagramNode<?> diagramNode : nodes) {
       if (!(node instanceof AngularUiRouterNode && diagramNode instanceof AngularUiRouterNode)) continue;
       final DiagramObject selected = (DiagramObject)diagramNode.getIdentifyingElement();
       final DiagramObject object = (DiagramObject)node.getIdentifyingElement();
@@ -461,7 +459,7 @@ public class AngularUiRouterDiagramProvider extends BaseDiagramProvider<DiagramO
 
   @Override
   public @NotNull DiagramExtras<DiagramObject> getExtras() {
-    return new DiagramExtras<DiagramObject>() {
+    return new DiagramExtras<>() {
       @Override
       public List<AnAction> getExtraActions() {
         return Collections.singletonList(new MyEditSourceAction());
@@ -581,11 +579,10 @@ public class AngularUiRouterDiagramProvider extends BaseDiagramProvider<DiagramO
         myAction.actionPerformed(e);
       }
       else {
-        final List<Trinity<String, SmartPsiElementPointer, Icon>> children = childrenList.stream()
-          .map(ch -> Trinity.create(ch.getType().name() + ": " + ch.getName(), ch.getNavigationTarget(), (Icon)null))
-          .collect(Collectors.toList());
+        final List<Trinity<String, SmartPsiElementPointer, Icon>> children = ContainerUtil
+          .map(childrenList, ch -> Trinity.create(ch.getType().name() + ": " + ch.getName(), ch.getNavigationTarget(), null));
         JSModulesDiagramUtils.showMembersSelectionPopup(
-          main.getType().name() + ": " + main.getName(),
+          main.getType().name() + ": " + main.getName(), //NON-NLS
           main.getNavigationTarget(), null, children, e.getDataContext());
       }
     }

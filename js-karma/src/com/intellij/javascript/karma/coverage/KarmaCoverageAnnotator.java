@@ -7,6 +7,7 @@ import com.intellij.coverage.SimpleCoverageAnnotator;
 import com.intellij.openapi.components.ServiceManager;
 import com.intellij.openapi.project.Project;
 import com.intellij.psi.PsiDirectory;
+import org.jetbrains.annotations.Nls;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -44,12 +45,12 @@ public class KarmaCoverageAnnotator extends SimpleCoverageAnnotator {
     }
 
     if (manager.isSubCoverageActive()) {
-      return coverageInfo.coveredLineCount > 0 ? "covered" : null;
+      return coverageInfo.coveredLineCount > 0 ? CoverageBundle.message("coverage.view.text.covered") : null;
     }
 
     String filesCoverageInfo = getFilesCoverageInformationString(coverageInfo);
     if (filesCoverageInfo != null) {
-      StringBuilder builder = new StringBuilder();
+      @Nls StringBuilder builder = new StringBuilder();
       builder.append(filesCoverageInfo);
       String linesCoverageInfo = getLinesCoverageInformationString(coverageInfo);
       if (linesCoverageInfo != null) {
@@ -71,12 +72,5 @@ public class KarmaCoverageAnnotator extends SimpleCoverageAnnotator {
     else {
       return calcCoveragePercentage(info) + CoverageBundle.message("lines.covered.info.percent.lines.covered");
     }
-  }
-
-  @Nullable
-  @Override
-  protected String getFilesCoverageInformationString(@NotNull DirCoverageInfo info) {
-    if (info.totalFilesCount == 0) return null;
-    return info.totalFilesCount + (info.totalFilesCount == 1 ? " file" : " files");
   }
 }

@@ -11,12 +11,12 @@ import com.intellij.execution.ExecutionException;
 import com.intellij.execution.process.ProcessOutput;
 import com.intellij.javascript.nodejs.interpreter.NodeInterpreterUtil;
 import com.intellij.javascript.nodejs.interpreter.NodeJsInterpreterRef;
+import com.intellij.javascript.nodejs.npm.InstallNodeLocalDependenciesAction;
 import com.intellij.javascript.nodejs.npm.NpmManager;
 import com.intellij.javascript.nodejs.util.NodePackage;
 import com.intellij.lang.javascript.buildTools.npm.PackageJsonUtil;
 import com.intellij.lang.javascript.linter.JSLinterGuesser;
 import com.intellij.lang.javascript.linter.JsqtProcessOutputViewer;
-import com.intellij.lang.javascript.modules.InstallNodeLocalDependenciesAction;
 import com.intellij.lang.javascript.service.JSLanguageServiceUtil;
 import com.intellij.notification.Notification;
 import com.intellij.notification.NotificationListener;
@@ -57,6 +57,7 @@ import com.intellij.util.NullableFunction;
 import com.intellij.util.SmartList;
 import com.intellij.util.containers.ContainerUtil;
 import com.intellij.util.text.SemVer;
+import org.jetbrains.annotations.Nls;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -68,7 +69,7 @@ import java.util.concurrent.CompletableFuture;
 
 public class ReformatWithPrettierAction extends AnAction implements DumbAware {
   private static final @NotNull Logger LOG = Logger.getInstance(ReformatWithPrettierAction.class);
-  private static long EDT_TIMEOUT_MS = 2000;
+  private static final long EDT_TIMEOUT_MS = 2000;
 
   private final ErrorHandler myErrorHandler;
 
@@ -404,12 +405,12 @@ public class ReformatWithPrettierAction extends AnAction implements DumbAware {
   }
 
   private static void runWriteCommandAction(@NotNull Project project, @NotNull Runnable runnable) {
-    WriteCommandAction.runWriteCommandAction(project, PrettierBundle.message("command.name"), null, runnable);
+    WriteCommandAction.runWriteCommandAction(project, PrettierBundle.message("reformat.with.prettier.command.name"), null, runnable);
   }
 
-  private static String buildNotificationMessage(@NotNull Document document,
-                                                 @NotNull CharSequence textBefore,
-                                                 boolean lineSeparatorsUpdated) {
+  private static @NotNull @Nls String buildNotificationMessage(@NotNull Document document,
+                                                               @NotNull CharSequence textBefore,
+                                                               boolean lineSeparatorsUpdated) {
     int number = VcsFacade.getInstance().calculateChangedLinesNumber(document, textBefore);
     if (number == 0) {
       return lineSeparatorsUpdated ? PrettierBundle.message("line.endings.were.updated")
@@ -419,11 +420,11 @@ public class ReformatWithPrettierAction extends AnAction implements DumbAware {
   }
 
   private static void showHintLater(@NotNull Editor editor,
-                                    @NotNull String text,
+                                    @NotNull @Nls String text,
                                     boolean isError,
                                     @Nullable HyperlinkListener hyperlinkListener) {
     ApplicationManager.getApplication().invokeLater(() -> {
-      final JComponent component = isError ? HintUtil.createErrorLabel(text, hyperlinkListener, null, null)
+      final JComponent component = isError ? HintUtil.createErrorLabel(text, hyperlinkListener, null)
                                            : HintUtil.createInformationLabel(text, hyperlinkListener, null, null);
       final LightweightHint hint = new LightweightHint(component);
       HintManagerImpl.getInstanceImpl()
@@ -442,7 +443,8 @@ public class ReformatWithPrettierAction extends AnAction implements DumbAware {
   private static void showErrorDetails(@NotNull Project project, @NotNull String text) {
     ProcessOutput output = new ProcessOutput();
     output.appendStderr(text);
-    JsqtProcessOutputViewer.show(project, PrettierUtil.PACKAGE_NAME, PrettierUtil.ICON, null, null, output);
+    JsqtProcessOutputViewer
+      .show(project, PrettierBundle.message("prettier.formatter.notification.title"), PrettierUtil.ICON, null, null, output);
   }
 
   private static void editSettings(@NotNull Project project) {
@@ -470,12 +472,12 @@ public class ReformatWithPrettierAction extends AnAction implements DumbAware {
 
     void showError(@NotNull Project project,
                    @Nullable Editor editor,
-                   @NotNull String text,
+                   @NotNull @Nls String text,
                    @Nullable Runnable onLinkClick);
 
     default void showErrorWithDetails(@NotNull Project project,
                                       @Nullable Editor editor,
-                                      @NotNull String text,
+                                      @NotNull @Nls String text,
                                       @NotNull String details) {
       showError(project, editor, text, () -> showErrorDetails(project, details));
     }
@@ -483,7 +485,7 @@ public class ReformatWithPrettierAction extends AnAction implements DumbAware {
 
   private static class DefaultErrorHandler implements ErrorHandler {
     @Override
-    public void showError(@NotNull Project project, @Nullable Editor editor, @NotNull String text, @Nullable Runnable onLinkClick) {
+    public void showError(@NotNull Project project, @Nullable Editor editor, @NotNull @Nls String text, @Nullable Runnable onLinkClick) {
       if (editor != null) {
         showHintLater(editor, PrettierBundle.message("prettier.formatter.hint.0", text), true, toHyperLinkListener(onLinkClick));
       }
@@ -493,7 +495,7 @@ public class ReformatWithPrettierAction extends AnAction implements DumbAware {
     }
 
     private static void showErrorNotification(@NotNull Project project,
-                                              @NotNull String text,
+                                              @NotNull @Nls String text,
                                               @Nullable NotificationListener notificationListener) {
       JSLinterGuesser.NOTIFICATION_GROUP
         .createNotification(PrettierBundle.message("prettier.formatter.notification.title"), text, NotificationType.ERROR,

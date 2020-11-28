@@ -1,4 +1,4 @@
-// Copyright 2000-2019 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2020 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package org.jetbrains.vuejs.model.webtypes.registry
 
 import com.fasterxml.jackson.databind.DeserializationFeature
@@ -6,8 +6,8 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.node.ArrayNode
 import com.fasterxml.jackson.databind.node.ObjectNode
 import com.fasterxml.jackson.databind.node.TextNode
-import com.google.common.cache.CacheBuilder
-import com.google.common.cache.CacheLoader
+import com.github.benmanes.caffeine.cache.Caffeine
+import com.github.benmanes.caffeine.cache.LoadingCache
 import com.intellij.javaee.ExternalResourceManager
 import com.intellij.javascript.nodejs.PackageJsonData
 import com.intellij.javascript.nodejs.npm.registry.NpmRegistryService
@@ -15,7 +15,6 @@ import com.intellij.javascript.nodejs.packageJson.NodePackageBasicInfo
 import com.intellij.lang.javascript.service.JSLanguageServiceUtil
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.PersistentStateComponent
-import com.intellij.openapi.components.ServiceManager
 import com.intellij.openapi.components.State
 import com.intellij.openapi.components.Storage
 import com.intellij.openapi.diagnostic.Logger
@@ -40,12 +39,10 @@ import java.io.IOException
 import java.util.*
 import java.util.Collections.emptySortedMap
 import java.util.concurrent.*
-import kotlin.collections.HashMap
 import kotlin.math.max
 
 @State(name = "VueWebTypesRegistry", storages = [Storage("web-types-registry.xml")])
 class VueWebTypesRegistry : PersistentStateComponent<Element> {
-
   companion object {
     private val LOG = Logger.getInstance(VueWebTypesRegistry::class.java)
     private const val WEB_TYPES_ENABLED_PACKAGES_URL = "https://raw.githubusercontent.com/JetBrains/web-types/master/packages/registry.json"
@@ -68,7 +65,7 @@ class VueWebTypesRegistry : PersistentStateComponent<Element> {
 
     val MODIFICATION_TRACKER = ModificationTracker { instance.myStateTimestamp }
 
-    val instance: VueWebTypesRegistry get() = ServiceManager.getService(VueWebTypesRegistry::class.java)
+    val instance: VueWebTypesRegistry get() = ApplicationManager.getApplication().getService(VueWebTypesRegistry::class.java)
 
     fun createWebTypesGlobal(project: Project, packageJsonFile: VirtualFile, owner: VueGlobal): Result<VueGlobal>? =
       loadWebTypes(packageJsonFile)?.let { (webTypes, file) ->
@@ -115,11 +112,11 @@ class VueWebTypesRegistry : PersistentStateComponent<Element> {
   private var myStateTimestamp = 0L
   private var myStateUpdate: FutureResultProvider<Boolean>? = null
 
-  private var myPluginLoadMap = HashMap<String, FutureResultProvider<WebTypes>>()
-  private var myPluginCache = CacheBuilder.newBuilder()
+  private var pluginLoadMap = HashMap<String, FutureResultProvider<WebTypes>>()
+  private var pluginCache: LoadingCache<String, WebTypes> = Caffeine.newBuilder()
     .maximumSize(20)
     .expireAfterAccess(30, TimeUnit.MINUTES)
-    .build(CacheLoader.from(this::buildPackageWebTypes))
+    .build { buildPackageWebTypes(it) }
 
   private val bundledWebTypes: Map<String, SortedMap<SemVer, String>> by lazy {
     val result: MutableMap<String, SortedMap<SemVer, String>> = mutableMapOf()
@@ -209,17 +206,17 @@ class VueWebTypesRegistry : PersistentStateComponent<Element> {
   }
 
   private fun loadPackageWebTypes(fileUrl: String): WebTypes? {
-    synchronized(myPluginLoadMap) {
-      myPluginCache.getIfPresent(fileUrl)?.let { return it }
-      myPluginLoadMap.computeIfAbsent(fileUrl) {
+    synchronized(pluginLoadMap) {
+      pluginCache.getIfPresent(fileUrl)?.let { return it }
+      pluginLoadMap.computeIfAbsent(fileUrl) {
         FutureResultProvider(Callable {
-          myPluginCache.get(fileUrl)
+          pluginCache.get(fileUrl)!!
         })
       }
     }.result
       ?.let {
-        synchronized(myPluginLoadMap) {
-          myPluginLoadMap.remove(fileUrl)
+        synchronized(pluginLoadMap) {
+          pluginLoadMap.remove(fileUrl)
         }
         return it
       }
@@ -227,11 +224,11 @@ class VueWebTypesRegistry : PersistentStateComponent<Element> {
   }
 
   private fun buildPackageWebTypes(fileUrl: String?): WebTypes? {
-    val webTypesJson = createObjectMapper().readValue(
-      VueWebTypesJsonsCache.getWebTypesJson(fileUrl ?: return null), WebTypes::class.java)
+    val webTypesJson = createObjectMapper().readValue(VueWebTypesJsonsCache.getWebTypesJson(fileUrl ?: return null), WebTypes::class.java)
     if (webTypesJson.framework != WebTypes.Framework.VUE) {
       return null
     }
+
     incStateVersion()
     return webTypesJson
   }
@@ -354,7 +351,7 @@ class VueWebTypesRegistry : PersistentStateComponent<Element> {
 
       for (versions in root.getChildren(PACKAGE_ELEMENT)) {
         val name = versions.getAttributeValue(NAME_ATTR) ?: continue
-        val map = availableVersions.computeIfAbsent(name) { TreeMap(Comparator.reverseOrder<SemVer>()) }
+        val map = availableVersions.computeIfAbsent(name) { TreeMap(Comparator.reverseOrder()) }
         for (version in versions.getChildren(VERSION_ELEMENT)) {
           val ver = version.getAttributeValue(VALUE_ATTR)?.let { SemVer.parseFromText(it) } ?: continue
           val url = version.getAttributeValue(URL_ATTR) ?: continue

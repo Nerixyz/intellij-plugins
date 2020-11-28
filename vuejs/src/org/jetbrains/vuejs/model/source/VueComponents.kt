@@ -65,7 +65,7 @@ class VueComponents {
       val scope = createLocalResolveScope(element)
 
       return JSStubBasedPsiTreeUtil.resolveLocally(reference, scope)
-               ?.let { getVueComponentFromResolve(listOf(it)) }
+               ?.let<PsiElement, VueSourceEntityDescriptor?> { getVueComponentFromResolve(listOf(it)) }
                ?.let { return it }
              ?: getVueComponentFromResolve(ES6QualifiedNameResolver(scope).resolveQualifiedName(reference))
     }
@@ -84,8 +84,8 @@ class VueComponents {
 
     fun getClassComponentDescriptor(clazz: JSClass): VueSourceEntityDescriptor =
       VueSourceEntityDescriptor(
-      initializer = getComponentDecorator(clazz)?.let { getDescriptorFromDecorator(it) },
-      clazz = clazz)
+        initializer = getComponentDecorator(clazz)?.let { getDescriptorFromDecorator(it) },
+        clazz = clazz)
 
     fun getComponentDecorator(element: JSClass): ES6Decorator? {
       element.attributeList
@@ -98,26 +98,25 @@ class VueComponents {
         ?.find(this::isComponentDecorator)
     }
 
-    fun getComponentDescriptor(element: PsiElement?): VueSourceEntityDescriptor? {
+    fun getComponentDescriptor(element: PsiElement?): VueSourceEntityDescriptor? =
       when (val resolved = resolveElementTo(element, JSObjectLiteralExpression::class, JSCallExpression::class, JSClass::class)) {
         // {...}
-        is JSObjectLiteralExpression -> return VueSourceEntityDescriptor(resolved)
+        is JSObjectLiteralExpression -> VueSourceEntityDescriptor(resolved)
 
         // Vue.extend({...})
         // defineComponent({...})
         is JSCallExpression ->
           if (isExtendVueCall(resolved) || isDefineComponentCall(resolved)) {
             PsiTreeUtil.getStubChildOfType(resolved.argumentList!!, JSObjectLiteralExpression::class.java)
-              ?.let { return VueSourceEntityDescriptor(it) }
-          }
+              ?.let { VueSourceEntityDescriptor(it) }
+          } else null
 
         // @Component({...}) class MyComponent {...}
-        is JSClassExpression ->
-          return VueSourceEntityDescriptor(getComponentDecorator(resolved)?.let { getDescriptorFromDecorator(it) },
+        is JSClass ->
+          VueSourceEntityDescriptor(getComponentDecorator(resolved)?.let { getDescriptorFromDecorator(it) },
                                            resolved)
+        else -> null
       }
-      return null
-    }
 
     @StubSafe
     fun getDescriptorFromDecorator(decorator: ES6Decorator): JSObjectLiteralExpression? {
@@ -138,22 +137,23 @@ class VueComponents {
     }
 
     @StubUnsafe
-    private fun isExtendVueCall(callExpression: JSCallExpression): Boolean {
-      return (callExpression.methodExpression as? JSReferenceExpression)?.referenceName == EXTEND_FUN
-    }
+    private fun isExtendVueCall(callExpression: JSCallExpression): Boolean =
+      (callExpression.methodExpression as? JSReferenceExpression)?.referenceName == EXTEND_FUN
 
     @StubUnsafe
-    private fun isDefineComponentCall(callExpression: JSCallExpression): Boolean {
-      return callExpression.methodExpression
+    fun isDefineComponentCall(callExpression: JSCallExpression): Boolean =
+      callExpression.methodExpression
         ?.castSafelyTo<JSReferenceExpression>()
         ?.takeIf { it.qualifier == null && it.referenceName == DEFINE_COMPONENT_FUN } != null
-    }
   }
 }
 
-class VueSourceEntityDescriptor(val initializer: JSObjectLiteralExpression? = null,
-                                val clazz: JSClass? = null,
-                                val source: PsiElement = clazz ?: initializer!!) {
+open class VueSourceEntityDescriptor(val initializer: JSElement? /* JSObjectLiteralExpression | JSFile */ = null,
+                                     val clazz: JSClass? = null,
+                                     val source: PsiElement = clazz ?: initializer!!) {
+  init {
+    assert(initializer == null || initializer is JSObjectLiteralExpression || initializer is JSFile)
+  }
 
   fun <T> getCachedValue(provider: (descriptor: VueSourceEntityDescriptor) -> CachedValueProvider.Result<T>): T {
     val providerKey: Key<CachedValue<T>> = CachedValuesManager.getManager(source.project).getKeyForClass(provider::class.java)

@@ -4,15 +4,12 @@ package org.jetbrains.vuejs.model
 import com.intellij.codeInsight.completion.CompletionUtil
 import com.intellij.lang.ecmascript6.psi.ES6ClassExpression
 import com.intellij.lang.ecmascript6.psi.JSExportAssignment
-import com.intellij.lang.ecmascript6.resolve.ES6PsiUtil
 import com.intellij.lang.injection.InjectedLanguageManager
 import com.intellij.lang.javascript.JSStubElementTypes
 import com.intellij.lang.javascript.JavaScriptBundle
-import com.intellij.lang.javascript.index.JSSymbolUtil
 import com.intellij.lang.javascript.psi.*
 import com.intellij.lang.javascript.psi.ecma6.ES6Decorator
 import com.intellij.lang.javascript.psi.ecmal4.JSClass
-import com.intellij.lang.javascript.psi.resolve.JSClassResolver
 import com.intellij.lang.javascript.psi.stubs.JSImplicitElement
 import com.intellij.lang.javascript.psi.stubs.impl.JSImplicitElementImpl
 import com.intellij.lang.javascript.psi.util.JSStubBasedPsiTreeUtil
@@ -33,6 +30,8 @@ import com.intellij.psi.xml.XmlTag
 import com.intellij.util.castSafelyTo
 import com.intellij.xml.util.HtmlUtil
 import com.intellij.xml.util.HtmlUtil.SCRIPT_TAG_NAME
+import org.jetbrains.vuejs.codeInsight.SETUP_ATTRIBUTE_NAME
+import org.jetbrains.vuejs.codeInsight.findDefaultExport
 import org.jetbrains.vuejs.codeInsight.getHostFile
 import org.jetbrains.vuejs.codeInsight.toAsset
 import org.jetbrains.vuejs.context.isVueContext
@@ -248,33 +247,18 @@ class VueModelManager {
       val file = element as? XmlFile ?: element.containingFile as? XmlFile
       if (file != null && file.fileType == VueFileType.INSTANCE) {
         val script = findScriptTag(file)
-        if (script != null) {
-          getDefaultExportedComponent(
+        if (script != null && !hasAttribute(script, SETUP_ATTRIBUTE_NAME)) {
+          findDefaultExport(
             resolveTagSrcReference(script) as? PsiFile
             ?: PsiTreeUtil.getStubChildOfType(script, JSEmbeddedContent::class.java)
-          )?.let { return it }
+          )
+            ?.let { getComponentDescriptor(it) }
+            ?.let { return it }
         }
         if (element.containingFile.originalFile.virtualFile?.fileType == VueFileType.INSTANCE)
           return VueSourceEntityDescriptor(source = element.containingFile)
       }
       return null
-    }
-
-    private fun getDefaultExportedComponent(content: PsiElement?): VueSourceEntityDescriptor? {
-      return content
-        ?.let {
-          (ES6PsiUtil.findDefaultExport(it) as? JSExportAssignment)?.stubSafeElement
-          ?: findDefaultCommonJSExport(it)
-        }
-        ?.let { defaultExport -> getComponentDescriptor(defaultExport) }
-    }
-
-    private fun findDefaultCommonJSExport(element: PsiElement): PsiElement? {
-      return JSClassResolver.getInstance().findElementsByQNameIncludingImplicit(JSSymbolUtil.MODULE_EXPORTS, element.containingFile)
-        .asSequence()
-        .filterIsInstance<JSDefinitionExpression>()
-        .mapNotNull { it.initializerOrStub }
-        .firstOrNull()
     }
 
     private fun findVueApp(templateElement: PsiElement): VueApp? {
